@@ -1,0 +1,12 @@
+src/
+tests/
+examples/
+.github/
+node_modules/
+coverage/
+*.tsbuildinfo
+tsconfig*.json
+vitest.config.ts
+.gitignore
+.env*
+.DS_Store
