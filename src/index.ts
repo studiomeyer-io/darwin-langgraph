@@ -42,6 +42,7 @@ export {
   createDarwinNode,
   type CreateDarwinNodeOptions,
   type DarwinNodeFn,
+  type DarwinRunOptionsPassthrough,
 } from "./create-darwin-node.js";
 
 export {
@@ -57,6 +58,24 @@ export {
   type DarwinTrajectoryEvent,
 } from "./with-darwin-evolution.js";
 
+// V0.2 — LangChain-native callback handler (preferred over `withDarwinEvolution`)
+export { DarwinCallbackHandler } from "./darwin-callback-handler.js";
+
+// V0.2 — OTEL GenAI Semantic Conventions mapping
+export {
+  toOtelAttributes,
+  toolCallToOtelAttributes,
+  type OtelAttributes,
+  type ToOtelAttributesOptions,
+  type ToolCallOtelOptions,
+} from "./to-otel-attributes.js";
+
+// V0.2 — MessagesAnnotation interop for graphs mixing createReactAgent + createDarwinNode
+export {
+  darwinMessagesAnnotation,
+  getMessagesChannelSpec,
+} from "./darwin-messages-annotation.js";
+
 export { DarwinNodeError, DarwinEvolutionHookError } from "./errors.js";
 
 export type {
@@ -71,4 +90,4 @@ export type {
 } from "./types.js";
 
 /** Adapter version — sync with `package.json` on every release. */
-export const VERSION = "0.1.0-alpha.1";
+export const VERSION = "0.2.0-alpha.1";

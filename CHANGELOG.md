@@ -3,6 +3,107 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0-alpha.1] — 2026-05-25
+
+### Added — three new surfaces (V0.1 roadmap → LIVE)
+
+- **Surface 4: `DarwinCallbackHandler`** — LangChain-native replacement
+  for `withDarwinEvolution`. Subclass of `BaseCallbackHandler` from
+  `@langchain/core/callbacks/base`. Pass via
+  `graph.invoke(input, { callbacks: [new DarwinCallbackHandler({ nodeMap,
+  onTrajectory }) ] })`. No monkey-patching of `invoke` / `stream`,
+  no `Set<symbol>` race-fix needed, no `streamMode` warn — works
+  identically across `invoke`, `stream` (any `streamMode`), and
+  `streamEvents`. Uses `metadata.langgraph_node` as the primary
+  node-name source (live-verified against `@langchain/langgraph@1.3.x`)
+  with the `runName` parameter as fallback for non-LangGraph chains.
+- **Surface 5: `toOtelAttributes(trajectory, opts?)` +
+  `toolCallToOtelAttributes(call, opts?)`** — pure mappers from Darwin's
+  `ExecutionTrace` to flat `Record<string, string|number|boolean>` keyed
+  by [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
+  Spec-compliant cache attribute names
+  (`gen_ai.usage.cache_read.input_tokens` /
+  `gen_ai.usage.cache_creation.input_tokens`). MCP tools correctly map
+  to `gen_ai.tool.type = "extension"` (server-side, calls external APIs)
+  vs `"function"` for builtins. Sensitive `arguments` / `result` fields
+  are opt-in per OTEL spec. NaN/Infinity values dropped from output
+  (OTEL exporter compliance).
+- **Surface 6: `darwinMessagesAnnotation(extra?)`** — variant of
+  `darwinAnnotation` that also includes LangGraph's canonical `messages`
+  channel (`messagesStateReducer`). Use it when your graph mixes Darwin
+  agents with `createReactAgent` / `MessagesAnnotation`-based prebuilt
+  agents. Power-user escape hatch `getMessagesChannelSpec()` exposed
+  for manual `Annotation.Root` composition.
+
+### Changed
+
+- **`withDarwinEvolution` is `@deprecated` since v0.2.0** — JSDoc tag
+  plus a one-shot `console.warn` on first call (process-level, never
+  spam). Will be **removed in v1.0.0**. Migration is two lines (see
+  README "Migration from v0.1.x to v0.2.x").
+- **VERSION constant bumped** to `0.2.0-alpha.1` in both `package.json`
+  and `src/index.ts` (verified by `prepublishOnly` script).
+
+### Fixed (R1 + R2 V0.2 code-review findings, all in-place pre-publish)
+
+The 3-Agent code-review loop ran twice on V0.2. R1 surfaced 10 findings,
+R2 caught 1 HIGH that R1 missed. All addressed before this release.
+
+**R1 — 6 MUST-FIX (S1185):**
+
+1. **CRITICAL (Critic 1):** `firedRuns: Set<string>` in
+   `DarwinCallbackHandler` was an unbounded memory leak for long-lived
+   handlers (e.g. server singletons). Removed — `runIdToName.delete` is
+   the sole dedup and LangGraph guarantees one `handleChainEnd` per
+   `runId`.
+2. **HIGH (Critic 2):** `isExecutionTrace` only checked `version === 1`
+   — a malformed trajectory could pass and crash downstream
+   `toOtelAttributes(trajectory.toolCalls.length)`. Guard now also
+   requires `Array.isArray(toolCalls)` + `Array.isArray(errors)`.
+   `toOtelAttributes` got defensive fallbacks too.
+3. **HIGH (Critic 3 + 7):** `typeof === "number"` passed `NaN` and
+   `Infinity` through to OTEL exporters (silent span drop). All numeric
+   attributes (token usage, durationMs, turn, textBlockCount, turnCount,
+   mcpInvocations) now use `Number.isFinite`.
+4. **HIGH (Research 1):** OTEL spec uses
+   `gen_ai.usage.cache_read.input_tokens` /
+   `cache_creation.input_tokens` per the official attribute registry,
+   not the short `cache_*_tokens` form we initially emitted. Fixed
+   pre-release (zero-cost rename in alpha).
+5. **HIGH (Research 3):** MCP tools execute server-side and call
+   external APIs — `gen_ai.tool.type` must be `"extension"`, not
+   `"function"`. Adapter now routes on the existing `is_mcp` heuristic.
+6. **MED (Critic 5):** `swallow(err)` used `if (warned || !err)` which
+   silently dropped falsy throws (`throw null` etc). Fixed in
+   `DarwinCallbackHandler.swallow`.
+
+**R2 — 1 HIGH (caught what R1 missed, S1185):**
+
+7. **HIGH (R2 Critic R2-1):** R1's fix #6 was applied to
+   `DarwinCallbackHandler.swallow` but NOT to the parallel `swallow`
+   inside `withDarwinEvolution`. Both now consistent.
+
+### Known limitations carried to V0.3
+
+- **`withDarwinEvolution` module-level deprecation flag** is not reset
+  across tests in the same process (R2 Critic R2-2). Acceptable for
+  one-shot warn semantics; testing the contract requires
+  `vi.resetModules()`.
+- **Double-wrapping `withDarwinEvolution` on the same graph instance**
+  is unsupported and produces no clear error (R2 Critic R2-3). Use
+  `DarwinCallbackHandler` instead — composable by default.
+- **Parent-run propagation** on `DarwinTrajectoryEvent` not exposed
+  yet (R1 Research 5). Planned for V0.3 — needs use-case validation.
+
+### Test coverage
+
+- **116/116 vitest tests green** (was 63 in V0.1).
+- New test files: `tests/darwin-callback-handler.test.ts` (14),
+  `tests/to-otel-attributes.test.ts` (18),
+  `tests/darwin-messages-annotation.test.ts` (7),
+  `tests/r2-v02-fixes.test.ts` (10 R1+R2 regression).
+- tsc strict + examples typecheck + version-sync + build all clean.
+
 ## [0.1.0-alpha.1] — 2026-05-24
 
 ### Added

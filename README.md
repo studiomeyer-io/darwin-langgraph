@@ -202,26 +202,59 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.1.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | alpha (this release) |
+| `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | alpha (this release) |
+| `0.1.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 
 The peer-dep range `darwin-agents: "^0.5.0-alpha.1"` follows npm's
 prerelease semver rules — `0.5.0-alpha.N` and `0.5.0` final satisfy it,
 but `0.5.1-alpha.0` does NOT. A patch release of this adapter will be
 required when `darwin-agents` bumps past `0.5.x`.
 
-## Known limitations (will be addressed in v0.2)
+## V0.2 — new surfaces (LIVE this release)
 
-- **`withDarwinEvolution` monkey-patches `invoke`/`stream`** — V0.2
-  will migrate to a `DarwinCallbackHandler` you pass via
-  `graph.invoke(input, { callbacks: [...] })`, which is the canonical
-  LangChain pattern (matches Langfuse, Braintrust, LangSmith handlers).
-- **No `gen_ai.*` OTEL attribute helper** — V0.2 will ship
-  `toOtelAttributes(trajectory)` so traces forward to Langfuse /
-  Braintrust / Datadog with OpenTelemetry GenAI Semantic Conventions.
-- **No bundled `messages` channel** — V0.2 will add
-  `darwinMessagesAnnotation()` for graphs that mix `createReactAgent`
-  with `createDarwinNode`. Until then, you can pass
-  `darwinAnnotation({ ...MessagesAnnotation.spec })` manually.
+V0.2 ships the three items from the V0.1 V0.2-roadmap, plus runtime
+deprecation warnings on the legacy wrapper:
+
+- **`DarwinCallbackHandler`** — LangChain-native replacement for
+  `withDarwinEvolution`. Pass it via `graph.invoke(input, { callbacks:
+  [new DarwinCallbackHandler({ nodeMap, onTrajectory }) ] })`. No more
+  monkey-patching `invoke`/`stream`, no more `Set<symbol>` race-fix,
+  no more `streamMode` gymnastics. Works identically with `invoke`,
+  `stream` (any `streamMode`), and `streamEvents` because LangChain's
+  callback mechanism fires regardless of how the consumer iterates.
+- **`toOtelAttributes(trajectory, opts?)` + `toolCallToOtelAttributes(call, opts?)`** —
+  pure mappers from Darwin's `ExecutionTrace` to flat
+  `Record<string, string|number|boolean>` keyed by
+  [OpenTelemetry GenAI Semantic Conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/)
+  (`gen_ai.operation.name`, `gen_ai.usage.input_tokens`, etc.) plus
+  Darwin-namespaced custom attrs. Drop straight into Langfuse,
+  Braintrust, Honeycomb, Datadog. Sensitive `arguments` / `result`
+  fields are opt-in per OTEL spec.
+- **`darwinMessagesAnnotation(extra?)`** — variant of `darwinAnnotation`
+  that also includes LangGraph's canonical `messages` channel
+  (`messagesStateReducer`). Use it when your graph mixes Darwin agents
+  with `createReactAgent` / `MessagesAnnotation`-based prebuilt agents.
+- **Runtime deprecation warning on `withDarwinEvolution`** — fires once
+  per process on first call. The function still works identically for
+  back-compat; it will be removed in v1.0. Migrate to
+  `DarwinCallbackHandler`.
+
+## Migration from v0.1.x to v0.2.x
+
+Two lines:
+
+```diff
+- import { withDarwinEvolution } from "darwin-langgraph";
++ import { DarwinCallbackHandler } from "darwin-langgraph";
+- const graph = withDarwinEvolution(compiledGraph, { nodeMap, onTrajectory });
+- const result = await graph.invoke(input);
++ const handler = new DarwinCallbackHandler({ nodeMap, onTrajectory });
++ const result = await compiledGraph.invoke(input, { callbacks: [handler] });
+```
+
+`DarwinEvolutionOptions`, `DarwinNodeMapEntry`, and the
+`DarwinTrajectoryEvent` shape passed to `onTrajectory` are 100% identical
+between both APIs — no other code changes required.
 
 The adapter releases follow `darwin-agents` major bumps. When
 `@langchain/langgraph` 2.x lands, the adapter ships a new major within

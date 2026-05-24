@@ -1,6 +1,6 @@
 {
   "name": "darwin-langgraph",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0-alpha.1",
   "description": "LangGraph.js adapter for darwin-agents — wrap self-evolving Darwin agents as StateGraph nodes with zero hard deps.",
   "type": "module",
   "main": "./dist/index.js",

@@ -92,12 +92,45 @@ interface InvokableGraph {
  * fires for each node listed in `nodeMap` after every `invoke` / `stream`
  * run. Returns the same graph instance for chaining.
  *
+ * @deprecated Since v0.2.0 — prefer {@link DarwinCallbackHandler} which uses
+ *   LangChain's canonical callback mechanism instead of monkey-patching
+ *   `graph.invoke` / `graph.stream`. This wrapper continues to work
+ *   identically for back-compat but will be removed in v1.0. Migration:
+ *
+ *   ```ts
+ *   // Before (v0.1):
+ *   const graph = withDarwinEvolution(compiledGraph, { nodeMap, onTrajectory });
+ *   const r = await graph.invoke(input);
+ *
+ *   // After (v0.2 — recommended):
+ *   const handler = new DarwinCallbackHandler({ nodeMap, onTrajectory });
+ *   const r = await compiledGraph.invoke(input, { callbacks: [handler] });
+ *   ```
+ *
  * @throws {DarwinEvolutionHookError} when `nodeMap` is empty or missing.
  */
+/**
+ * Process-wide deprecation warning flag for `withDarwinEvolution`. We
+ * emit one `console.warn` on the first call so CI runs (no IDE for
+ * `@deprecated` strikethrough) still see the migration hint. After the
+ * first warn we go silent — never spam.
+ *
+ * R1 V0.2 Research Finding 7 + Analyst Observation 2 (S1185).
+ */
+let withDarwinEvolutionDeprecationWarned = false;
+
 export function withDarwinEvolution<G extends InvokableGraph>(
   graph: G,
   opts: DarwinEvolutionOptions,
 ): G {
+  if (!withDarwinEvolutionDeprecationWarned) {
+    withDarwinEvolutionDeprecationWarned = true;
+    console.warn(
+      "[darwin-langgraph] withDarwinEvolution() is deprecated since v0.2.0 " +
+        "and will be removed in v1.0.0. Migrate to DarwinCallbackHandler — " +
+        "see https://github.com/studiomeyer-io/darwin-langgraph#migration",
+    );
+  }
   if (!opts || !opts.nodeMap || Object.keys(opts.nodeMap).length === 0) {
     throw new DarwinEvolutionHookError(
       "withDarwinEvolution: opts.nodeMap is required and must contain at least one entry.",
@@ -133,12 +166,16 @@ export function withDarwinEvolution<G extends InvokableGraph>(
 
   let warned = false;
   const swallow = (err: unknown): void => {
-    if (warned || !err) return;
+    // R2 V0.2 Critic Finding R2-1 (S1185): do NOT short-circuit on
+    // falsy `err` — `throw 0` / `throw null` / `throw ""` from user
+    // callbacks must still surface in logs. Diverged from
+    // DarwinCallbackHandler.swallow until R2 caught it.
+    if (warned) return;
     warned = true;
     console.warn(
       `[darwin-langgraph] onTrajectory callback threw — swallowed. ` +
         `Subsequent throws will be silent. Original error: ` +
-        `${(err as Error)?.message ?? String(err)}`,
+        `${err instanceof Error ? err.message : String(err)}`,
     );
   };
 
