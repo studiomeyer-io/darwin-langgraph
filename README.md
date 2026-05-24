@@ -267,9 +267,20 @@ delete process.env.ANTHROPIC_API_KEY; // enforce Max-Plan subscription
 ## Versioning
 
 Released under the `alpha` npm dist-tag in parallel with
-`darwin-agents@0.5.0-alpha.1`. Default `npm install darwin-langgraph`
-will NOT resolve until `0.1.0` final ships. Explicit opt-in via
-`npm install darwin-langgraph@alpha`.
+`darwin-agents@0.5.0-alpha.1`. Because `0.1.0-alpha.1` is the FIRST
+publish, npm assigns BOTH `alpha` and `latest` to it (npm rule: a
+package must always have a `latest` tag) — so `npm install
+darwin-langgraph` and `npm install darwin-langgraph@alpha` resolve to
+the same version right now. Once `0.1.0` final ships, `latest` will
+point to the stable release and `alpha` will continue to track
+pre-releases.
+
+For maximum clarity in alpha-stage projects, prefer the explicit
+opt-in form:
+
+```bash
+npm install darwin-langgraph@alpha @langchain/langgraph darwin-agents@alpha
+```
 
 ## License
 

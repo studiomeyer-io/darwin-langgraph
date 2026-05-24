@@ -37,9 +37,12 @@ controls the installed versions and the adapter never pins them.
 
 - Released under the `alpha` npm dist-tag in parallel with
   `darwin-agents@0.5.0-alpha.1` (the first release that ships
-  `ExecutionTrace` capture). Default `npm install darwin-langgraph`
-  refuses to resolve until `0.1.0` final ships — explicit opt-in via
-  `npm install darwin-langgraph@alpha`.
+  `ExecutionTrace` capture). Because `0.1.0-alpha.1` is the very
+  first publish of this package, npm assigns BOTH `alpha` and
+  `latest` to it (npm rule: `latest` always exists), so
+  `npm install darwin-langgraph` resolves to the alpha version
+  until `0.1.0` final ships. Prefer the explicit
+  `npm install darwin-langgraph@alpha` form for clarity.
 - The adapter never touches `ANTHROPIC_API_KEY`. If you run Darwin on a
   Claude Max subscription via the Claude Code CLI, set `delete
   process.env.ANTHROPIC_API_KEY` in your own bootstrap.
