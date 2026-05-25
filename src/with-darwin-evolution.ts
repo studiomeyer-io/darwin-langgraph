@@ -54,6 +54,30 @@ export interface DarwinTrajectoryEvent {
    * state and corrupts subsequent runs (R1 Critic Finding 4, S1185).
    */
   finalState: Readonly<Record<string, unknown>>;
+  /**
+   * LangChain runId of the node-chain that produced this trajectory.
+   * Only populated by {@link DarwinCallbackHandler} (v0.2+) where the
+   * runId is part of the LangChain callback contract. Undefined for the
+   * legacy `withDarwinEvolution` monkey-patch path (no runId there).
+   *
+   * Stable identifier suitable for correlation with OTEL spans, Langfuse
+   * traces, LangSmith runs, or custom run-id-based logging.
+   *
+   * NEW V0.3 (S1187).
+   */
+  runId?: string;
+  /**
+   * LangChain parentRunId — the runId of the chain that invoked this
+   * node-chain. For top-level graph invokes the parent is the graph
+   * itself. For child graphs / nested invocations the parent is the
+   * outer graph's runId. Only populated by {@link DarwinCallbackHandler}.
+   *
+   * Use this to build span/trace hierarchies in OTEL exporters,
+   * Langfuse, etc.
+   *
+   * NEW V0.3 (S1187).
+   */
+  parentRunId?: string;
 }
 
 /** Options for {@link withDarwinEvolution}. */
@@ -116,8 +140,31 @@ interface InvokableGraph {
  * first warn we go silent — never spam.
  *
  * R1 V0.2 Research Finding 7 + Analyst Observation 2 (S1185).
+ *
+ * Exported for tests via `vi.resetModules()` re-import.
  */
 let withDarwinEvolutionDeprecationWarned = false;
+
+/**
+ * Process-wide double-wrap warning flag. Fires once per process if a
+ * caller wraps the same graph twice with `withDarwinEvolution`. Catches
+ * the silent footgun where the SECOND wrap chains on top of the first
+ * — both hooks fire per run, often producing duplicate evolution
+ * trajectories and confusing test failures.
+ *
+ * NEW V0.3 (S1187).
+ */
+let withDarwinEvolutionDoubleWrapWarned = false;
+
+/**
+ * Sentinel symbol stamped on graphs that have already been wrapped.
+ * Looked up at the start of each `withDarwinEvolution` call to detect
+ * double-wrap. Using a Symbol (not a string) so it cannot be cleared
+ * accidentally by `JSON.parse(JSON.stringify(graph))` style cloning.
+ *
+ * NEW V0.3 (S1187).
+ */
+const DARWIN_EVOLUTION_WRAPPED = Symbol.for("darwin-langgraph.evolution.wrapped");
 
 export function withDarwinEvolution<G extends InvokableGraph>(
   graph: G,
@@ -130,6 +177,25 @@ export function withDarwinEvolution<G extends InvokableGraph>(
         "and will be removed in v1.0.0. Migrate to DarwinCallbackHandler — " +
         "see https://github.com/studiomeyer-io/darwin-langgraph#migration",
     );
+  }
+  // V0.3 (S1187): double-wrap detection. If the graph carries our
+  // sentinel, the caller passed a wrapped graph through `withDarwinEvolution`
+  // again — both hooks will fire and produce duplicate trajectories. Warn
+  // once per process and continue (some users may legitimately layer
+  // multiple wrappers with different `nodeMap` slices, so we don't
+  // throw — but the warning is loud).
+  const wrappedGraph = graph as G & { [DARWIN_EVOLUTION_WRAPPED]?: boolean };
+  if (wrappedGraph[DARWIN_EVOLUTION_WRAPPED] === true) {
+    if (!withDarwinEvolutionDoubleWrapWarned) {
+      withDarwinEvolutionDoubleWrapWarned = true;
+      console.warn(
+        "[darwin-langgraph] withDarwinEvolution(): graph appears to be wrapped " +
+          "twice — both hooks will fire per run, producing duplicate trajectories. " +
+          "If this is intentional, ignore this warning; otherwise wrap only once " +
+          "or migrate to DarwinCallbackHandler which supports multiple handlers " +
+          "natively via callbacks: [h1, h2]. Subsequent double-wraps are silent.",
+      );
+    }
   }
   if (!opts || !opts.nodeMap || Object.keys(opts.nodeMap).length === 0) {
     throw new DarwinEvolutionHookError(
@@ -360,6 +426,14 @@ export function withDarwinEvolution<G extends InvokableGraph>(
     Object.defineProperty(graph, "stream", {
       value: wrappedStream,
       writable: true,
+      configurable: true,
+      enumerable: false,
+    });
+    // V0.3 (S1187): stamp the sentinel so a subsequent call detects the
+    // double-wrap. Non-enumerable so it doesn't leak in JSON/log dumps.
+    Object.defineProperty(graph, DARWIN_EVOLUTION_WRAPPED, {
+      value: true,
+      writable: false,
       configurable: true,
       enumerable: false,
     });

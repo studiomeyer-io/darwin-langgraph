@@ -59,7 +59,10 @@ export {
 } from "./with-darwin-evolution.js";
 
 // V0.2 — LangChain-native callback handler (preferred over `withDarwinEvolution`)
-export { DarwinCallbackHandler } from "./darwin-callback-handler.js";
+export {
+  DarwinCallbackHandler,
+  type DarwinCallbackHandlerOptions,
+} from "./darwin-callback-handler.js";
 
 // V0.2 — OTEL GenAI Semantic Conventions mapping
 export {
@@ -90,4 +93,4 @@ export type {
 } from "./types.js";
 
 /** Adapter version — sync with `package.json` on every release. */
-export const VERSION = "0.2.0-alpha.1";
+export const VERSION = "0.3.0-alpha.1";

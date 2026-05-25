@@ -1,0 +1,121 @@
+name: Bug Report
+description: Report a bug in the adapter package
+title: "[Bug] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: What happened? One paragraph is fine.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface?
+      description: Pick the area where the bug appears. If it spans multiple, pick the most-affected one and mention the others in the description.
+      options:
+        - createDarwinNode
+        - darwinAnnotation / getDarwinChannelSpec
+        - withDarwinEvolution (@deprecated, V0.1 legacy)
+        - DarwinCallbackHandler
+        - toOtelAttributes / toolCallToOtelAttributes
+        - darwinMessagesAnnotation / getMessagesChannelSpec
+        - Errors (DarwinNodeError / DarwinEvolutionHookError)
+        - Types (re-exports from darwin-agents)
+        - Package-wide (build, package.json, tsconfig)
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Minimal vitest-style snippet that reproduces the issue. Use the real `@langchain/langgraph` package; mock `runAgent` from `darwin-agents` if needed.
+      placeholder: |
+        ```ts
+        import { StateGraph } from "@langchain/langgraph";
+        import { createDarwinNode, darwinAnnotation, DarwinCallbackHandler } from "darwin-langgraph";
+
+        const graph = new StateGraph(darwinAnnotation())
+          .addNode("research", createDarwinNode(...))
+          .addEdge("__start__", "research")
+          .compile();
+
+        const handler = new DarwinCallbackHandler({ nodeMap: { research: "researcher" } });
+        await graph.invoke({ task: "..." }, { callbacks: [handler] });
+        // expected: ...
+        // actual:   ...
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: Stack traces and console output welcome.
+    validations:
+      required: true
+
+  - type: input
+    id: adapter-version
+    attributes:
+      label: Adapter Version
+      description: From `npm ls darwin-langgraph` in your project.
+      placeholder: "0.3.0-alpha.1"
+    validations:
+      required: true
+
+  - type: input
+    id: langgraph-version
+    attributes:
+      label: "@langchain/langgraph Version"
+      placeholder: "1.3.2"
+    validations:
+      required: true
+
+  - type: input
+    id: darwin-agents-version
+    attributes:
+      label: darwin-agents Version
+      placeholder: "0.5.0-alpha.2"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: node-version
+    attributes:
+      label: Node.js Version
+      options:
+        - "20"
+        - "22"
+        - "other (mention in description)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Console output, vitest run output, stack traces. Scrub secrets first.
+      render: shell
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I checked existing issues + discussions for duplicates
+          required: true
+        - label: I ran `npm test` against my local reproduction (or stated which test is unreachable)
+          required: true

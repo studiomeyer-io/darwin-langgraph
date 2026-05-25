@@ -62,6 +62,29 @@ import type {
 } from "./with-darwin-evolution.js";
 
 /**
+ * V0.3 — extra options on top of `DarwinEvolutionOptions`. Pass to
+ * `new DarwinCallbackHandler({ ...opts, maxInFlightRuns })`.
+ *
+ * NEW V0.3 (S1187).
+ */
+export interface DarwinCallbackHandlerOptions extends DarwinEvolutionOptions {
+  /**
+   * Maximum number of in-flight `runId → nodeName` mappings the handler
+   * holds at once. If `handleChainEnd` / `handleChainError` never fires
+   * (LangGraph internal bug, OS-level kill of the worker mid-invoke,
+   * etc.) the map would otherwise grow without bound and leak memory.
+   *
+   * When the limit is exceeded, the OLDEST entry is evicted and a
+   * one-shot warning is logged. Default: 1024 (enough for typical
+   * fan-out patterns with safety margin, small enough to surface real
+   * leaks within minutes of an incident).
+   *
+   * Set to `Infinity` to opt out — discouraged in production.
+   */
+  maxInFlightRuns?: number;
+}
+
+/**
  * Resolved entry from `DarwinEvolutionOptions.nodeMap`. Same shape used
  * internally by {@link withDarwinEvolution}.
  */
@@ -69,6 +92,21 @@ interface ResolvedNodeMapEntry {
   agentName: string;
   trajectoryKey: string;
 }
+
+/**
+ * Internal state per tracked run. Holds the mapped node name plus —
+ * NEW V0.3 (S1187) — the parentRunId from LangChain's callback contract.
+ * The parentRunId is propagated into {@link DarwinTrajectoryEvent} so
+ * downstream consumers (OTEL, Langfuse, LangSmith) can rebuild the span
+ * hierarchy without an extra side-channel.
+ */
+interface InFlightRun {
+  nodeName: string;
+  parentRunId: string | undefined;
+}
+
+/** Default cap. Aligned with reasonable LangGraph fan-out (~1k nodes / minute). */
+const DEFAULT_MAX_IN_FLIGHT_RUNS = 1024;
 
 function isExecutionTrace(value: unknown): value is ExecutionTrace {
   if (!value || typeof value !== "object") return false;
@@ -124,10 +162,17 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
 
   private readonly resolved: Map<string, ResolvedNodeMapEntry>;
   private readonly onTrajectory: DarwinEvolutionOptions["onTrajectory"];
-  private readonly runIdToName: Map<string, string> = new Map();
+  /**
+   * runId → in-flight run state. Map preserves insertion order so the
+   * oldest entry is always at `.keys().next().value` for LRU eviction
+   * when the cap is exceeded (V0.3 hung-invoke guard).
+   */
+  private readonly runIdToName: Map<string, InFlightRun> = new Map();
+  private readonly maxInFlightRuns: number;
   private warned = false;
+  private evictionWarned = false;
 
-  constructor(opts: DarwinEvolutionOptions) {
+  constructor(opts: DarwinCallbackHandlerOptions) {
     super();
     if (!opts || !opts.nodeMap || Object.keys(opts.nodeMap).length === 0) {
       throw new DarwinEvolutionHookError(
@@ -137,6 +182,16 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
     const defaultKey = opts.defaultTrajectoryKey ?? "darwinTrajectory";
     this.resolved = normaliseNodeMap(opts.nodeMap, defaultKey);
     this.onTrajectory = opts.onTrajectory;
+    // V0.3 (S1187): hung-invoke guard. NaN / negative / non-number falls
+    // back to default. Infinity disables the cap (opt-out).
+    const raw = opts.maxInFlightRuns;
+    if (raw === Infinity) {
+      this.maxInFlightRuns = Infinity;
+    } else if (typeof raw === "number" && Number.isFinite(raw) && raw > 0) {
+      this.maxInFlightRuns = Math.floor(raw);
+    } else {
+      this.maxInFlightRuns = DEFAULT_MAX_IN_FLIGHT_RUNS;
+    }
   }
 
   /**
@@ -157,7 +212,7 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
     _tags?: string[],
     metadata?: Record<string, unknown>,
     runName?: string,
-    _parentRunId?: string,
+    parentRunId?: string,
     _extra?: Record<string, unknown>,
   ): void {
     // Primary source: metadata.langgraph_node (set by LangGraph internals).
@@ -176,7 +231,37 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
     // Only track names that map to a known node. Reduces memory and
     // makes lookup in handleChainEnd a simple `.has()` check.
     if (!this.resolved.has(nodeName)) return;
-    this.runIdToName.set(runId, nodeName);
+
+    // V0.3 (S1187): hung-invoke guard. If we are about to exceed the cap
+    // AND the runId is genuinely new (not a re-fire), evict the oldest
+    // entry. Map iteration order is insertion order — the first key is
+    // the oldest. Warn once per handler instance so a real leak shows up
+    // in logs without spamming.
+    if (
+      this.maxInFlightRuns !== Infinity &&
+      !this.runIdToName.has(runId) &&
+      this.runIdToName.size >= this.maxInFlightRuns
+    ) {
+      const oldest = this.runIdToName.keys().next().value;
+      if (oldest !== undefined) {
+        this.runIdToName.delete(oldest);
+      }
+      if (!this.evictionWarned) {
+        this.evictionWarned = true;
+        console.warn(
+          `[darwin-langgraph] DarwinCallbackHandler: in-flight runs exceeded ` +
+            `${this.maxInFlightRuns} — evicting oldest entry. This usually ` +
+            `means handleChainEnd / handleChainError did not fire for some ` +
+            `runs (worker crash, parent invoke aborted mid-flight, or ` +
+            `LangGraph internal bug). Subsequent evictions are silent.`,
+        );
+      }
+    }
+
+    this.runIdToName.set(runId, {
+      nodeName,
+      parentRunId: typeof parentRunId === "string" ? parentRunId : undefined,
+    });
   }
 
   /**
@@ -195,19 +280,19 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
     _tags?: string[],
     _kwargs?: { inputs?: ChainValues },
   ): void {
-    const runName = this.runIdToName.get(runId);
-    if (!runName) return;
+    const inFlight = this.runIdToName.get(runId);
+    if (!inFlight) return;
     // One-shot cleanup of the mapping so completed runs don't leak.
     // R1 V0.2 Critic Finding 1 (S1185): the `runIdToName.delete` here
     // is the ONLY dedup we need — LangGraph guarantees `handleChainEnd`
     // fires exactly once per `runId`, and after deletion any second
-    // call returns early at `if (!runName)`. The pre-V0.2 `firedRuns`
+    // call returns early at `if (!inFlight)`. The pre-V0.2 `firedRuns`
     // Set was redundant AND leaked unbounded — removed.
     this.runIdToName.delete(runId);
 
     if (!this.onTrajectory) return;
 
-    const entry = this.resolved.get(runName);
+    const entry = this.resolved.get(inFlight.nodeName);
     if (!entry) return;
 
     if (outputs === null || typeof outputs !== "object") return;
@@ -215,11 +300,16 @@ export class DarwinCallbackHandler extends BaseCallbackHandler {
     if (!isExecutionTrace(trajectory)) return;
 
     const frozen = Object.freeze({ ...(outputs as Record<string, unknown>) });
+    // V0.3 (S1187): propagate runId + parentRunId so OTEL exporters,
+    // Langfuse, LangSmith, etc. can rebuild the span hierarchy from the
+    // event payload alone (no separate runId-tracking side-channel).
     const event: DarwinTrajectoryEvent = {
-      nodeName: runName,
+      nodeName: inFlight.nodeName,
       agentName: entry.agentName,
       trajectory,
       finalState: frozen,
+      runId,
+      ...(inFlight.parentRunId !== undefined ? { parentRunId: inFlight.parentRunId } : {}),
     };
 
     // Fire-and-forget. The handler base class supports async returns

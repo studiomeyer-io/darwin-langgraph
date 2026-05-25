@@ -3,6 +3,111 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0-alpha.1] — 2026-05-25
+
+V0.3 closes the three deferred items from V0.2's R2 review (parent-run
+propagation, double-wrap detection, hung-invoke guard) and lifts the
+repository to the StudioMeyer open-source-standard documentation layout
+(CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, ECOSYSTEM, issue + PR
+templates, GitHub Actions CI matrix on Node 20 + 22).
+
+### Added — three new behaviours + one new option
+
+- **`DarwinTrajectoryEvent.runId` + `.parentRunId`** — propagated by
+  `DarwinCallbackHandler` from the LangChain callback contract. Lets
+  downstream consumers (OTEL exporters, Langfuse, LangSmith, custom
+  span-tree loggers) rebuild the chain hierarchy from the event payload
+  alone without a separate runId-tracking side-channel. `runId` is
+  always present on V0.2+ handler events; `parentRunId` is present
+  only when the chain has a parent (omitted for top-level invokes).
+- **`withDarwinEvolution` double-wrap warning** — a `Symbol.for(...)`
+  sentinel is stamped on each wrapped graph. A second wrap of the same
+  graph instance now emits a one-shot `console.warn` flagging the
+  duplicate-hook footgun. The wrap still succeeds (some users legitimately
+  layer multiple `nodeMap` slices), but the silent-double-fire case
+  is now visible in logs.
+- **`DarwinCallbackHandler` hung-invoke guard** — new option
+  `maxInFlightRuns?: number` on `DarwinCallbackHandlerOptions`. Caps the
+  internal `runId → InFlightRun` map. When the cap is exceeded the
+  oldest entry is evicted (LRU via Map insertion order) and a
+  one-shot warning fires. Defaults to 1024 — small enough to surface
+  real leaks within minutes, large enough for typical fan-out. Set to
+  `Infinity` to opt out.
+
+### Changed
+
+- **`DarwinCallbackHandlerOptions` type exported** alongside
+  `DarwinCallbackHandler`. Was internal in V0.2; now a public type so
+  consumers can build wrapper handlers without re-declaring the shape.
+- **`InFlightRun` shape** — internal change in `DarwinCallbackHandler`:
+  the `runIdToName` map now stores `{ nodeName, parentRunId }` rather
+  than just the name string, to carry parentRunId through to
+  `handleChainEnd`. Non-breaking — only the internal field type changed.
+- **VERSION constant bumped** to `0.3.0-alpha.1` in both `package.json`
+  and `src/index.ts` (verified by `prepublishOnly` script).
+
+### Added — open-source documentation standard
+
+The repo now matches the
+[`temporal-memory-workflows`](https://github.com/studiomeyer-io/temporal-memory-workflows)
+OS-standard layout. New top-level files:
+
+- **`CONTRIBUTING.md`** — folder layout, code-review expectations, PR
+  format, Conventional Commits convention, deprecation contract on
+  `withDarwinEvolution`, adapter-vs-upstream-bugs separation.
+- **`CODE_OF_CONDUCT.md`** — adapted from Contributor Covenant 2.1.
+- **`SECURITY.md`** — disclosure policy, supported versions
+  (`0.3.x` + `0.2.x` security-only), supply-chain stance (no
+  postinstall scripts), defense-in-depth layer breakdown.
+- **`ECOSYSTEM.md`** — where the adapter sits in the StudioMeyer
+  toolkit, pairing notes with `darwin-agents` /
+  `@langchain/langgraph` / `temporal-memory-workflows`, when-to-use-what
+  decision table, sibling-repo links.
+- **`.github/ISSUE_TEMPLATE/{bug_report,feature_request,config}.yml`**
+  — surface-aware bug template, problem-first feature template, contact
+  links routing to upstream where appropriate.
+- **`.github/PULL_REQUEST_TEMPLATE.md`** — surface checklist,
+  zero-hard-dep check, deprecation-contract check, R1/R2 code-review
+  trail field for maintainers.
+- **`.github/workflows/ci.yml`** — Node 20 + 22 matrix, runs
+  `npm ci` → `verify-version-sync` → `typecheck` → `examples:check` →
+  `test` → `build` on every push to `main` and every PR.
+
+### Test coverage
+
+- **132/132 vitest tests green** (was 116 in V0.2, **+16 V0.3 tests**).
+- New test file: `tests/v03-features.test.ts` (16 tests across 4 groups:
+  parent-run propagation, double-wrap warning, hung-invoke timeout
+  guard, `vi.resetModules()` pattern for module-level flag tests).
+- tsc strict + examples typecheck + version-sync + build all clean.
+- No regressions: all V0.1 + V0.2 surface tests + R1 + R2 fixes still
+  green.
+
+### Migration notes
+
+- **From V0.2.x → V0.3.x:** No code changes required. The
+  `runId`/`parentRunId` fields on `DarwinTrajectoryEvent` are optional
+  additions; existing callbacks ignore them. The double-wrap warning
+  only fires if you actually double-wrap (most users do not). The
+  default `maxInFlightRuns: 1024` cap is invisible in normal use.
+- **From V0.1.x → V0.3.x:** Still recommended to migrate from
+  `withDarwinEvolution` to `DarwinCallbackHandler` — see V0.2
+  migration notes in this changelog.
+
+### V0.4 Roadmap (deferred)
+
+- **`reflectionRunPrompt` override on `darwin-agents` (paper-fidelity).**
+  The GEPA paper uses a stronger reflection LM than the task LM. Currently
+  the adapter inherits `darwin-agents@0.5.0-alpha.2`'s single-`runPrompt`
+  implementation. Defer to a paired bump.
+- **OTEL exporter binding helper** — turn the pure `toOtelAttributes`
+  mapping into a one-liner that registers a span per trajectory with
+  a configured tracer.
+- **Langfuse handler subclass** — `DarwinLangfuseHandler` that extends
+  `DarwinCallbackHandler` and emits Langfuse traces directly.
+- **LangSmith trace correlation** — propagate `runId`/`parentRunId`
+  into a LangSmith-compatible attribute set.
+
 ## [0.2.0-alpha.1] — 2026-05-25
 
 ### Added — three new surfaces (V0.1 roadmap → LIVE)

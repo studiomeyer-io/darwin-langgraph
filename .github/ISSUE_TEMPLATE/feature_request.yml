@@ -1,0 +1,66 @@
+name: Feature Request
+description: Suggest a new surface, integration, or adapter improvement
+title: "[Feature] "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem are you trying to solve? Describe the situation FIRST, not the proposed solution.
+      placeholder: |
+        I'm running Darwin agents inside a LangGraph state-graph and want to correlate trajectories
+        with my existing Langfuse traces. Currently I have to manually walk the runIdToName map
+        to rebuild span hierarchy — the adapter doesn't expose enough hierarchy info.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution (optional)
+      description: If you have a concrete idea, sketch it here. Be explicit about which surface it lives on.
+      placeholder: |
+        Maybe a `DarwinTrajectoryEvent.parentRunId` field, populated from the LangChain callback contract.
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Which surface (if applicable)?
+      options:
+        - new top-level surface
+        - createDarwinNode
+        - darwinAnnotation
+        - withDarwinEvolution (no — this is deprecated)
+        - DarwinCallbackHandler
+        - toOtelAttributes
+        - darwinMessagesAnnotation
+        - cross-cutting (types, errors, docs)
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What did you try before opening this issue? Workarounds in user code? Different upstream packages?
+
+  - type: textarea
+    id: ecosystem-fit
+    attributes:
+      label: Ecosystem Fit
+      description: Does this feature belong here or upstream (`darwin-agents`, `@langchain/langgraph`, your own consumer code)? Why is the adapter the right layer?
+      placeholder: |
+        This is adapter-layer because the data flow is LangChain-callback -> Darwin-event mapping —
+        the adapter is the only piece that sees both sides. Upstream `darwin-agents` doesn't know
+        about LangChain runIds; upstream `@langchain/langgraph` doesn't know about Darwin trajectories.
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submit checklist
+      options:
+        - label: I checked existing issues + discussions for duplicates
+          required: true
+        - label: I have searched for similar functionality in `darwin-agents` and `@langchain/langgraph` and confirmed it doesn't belong upstream
+          required: true

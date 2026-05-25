@@ -1,0 +1,20 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability
+    url: mailto:matthias10121980meyer@gmail.com
+    about: Please report security issues privately. See SECURITY.md.
+  - name: General Questions / Discussions
+    url: https://github.com/studiomeyer-io/darwin-langgraph/discussions
+    about: Use Discussions for usage questions and patterns, not issues.
+  - name: darwin-agents upstream
+    url: https://github.com/studiomeyer-io/darwin-agents/issues
+    about: Bugs in trajectory capture, agent definitions, GEPA optimisation, or memory providers belong upstream.
+  - name: "@langchain/langgraph upstream"
+    url: https://github.com/langchain-ai/langgraphjs/issues
+    about: Bugs in StateGraph, the callback contract, or LangGraph internals belong upstream — not here.
+  - name: StudioMeyer Memory product
+    url: https://memory.studiomeyer.io
+    about: Issues with the hosted Memory backend (auth, REST API errors, latency) belong upstream.
+  - name: Sister repo (durable workflows)
+    url: https://github.com/studiomeyer-io/temporal-memory-workflows
+    about: If you need crash-resume / multi-day workflow durability rather than in-process state graphs, look at the Temporal templates repo.

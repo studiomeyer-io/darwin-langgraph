@@ -202,7 +202,8 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | alpha (this release) |
+| `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | alpha (this release) |
+| `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.1.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 
 The peer-dep range `darwin-agents: "^0.5.0-alpha.1"` follows npm's
@@ -210,7 +211,83 @@ prerelease semver rules — `0.5.0-alpha.N` and `0.5.0` final satisfy it,
 but `0.5.1-alpha.0` does NOT. A patch release of this adapter will be
 required when `darwin-agents` bumps past `0.5.x`.
 
-## V0.2 — new surfaces (LIVE this release)
+## V0.3 — observability + safety (LIVE this release)
+
+V0.3 closes the three deferred items from V0.2's R2 review. Backwards
+compatible — no consumer code changes required.
+
+### Parent-run propagation on `DarwinTrajectoryEvent`
+
+`DarwinCallbackHandler` now populates two new fields on every emitted
+event:
+
+- **`runId: string`** — the LangChain runId of the node-chain that
+  produced the trajectory. Stable identifier suitable for correlation
+  with OTEL spans, Langfuse traces, LangSmith runs.
+- **`parentRunId?: string`** — the runId of the chain that invoked
+  this node-chain. Omitted for top-level invokes. Use it to build the
+  full span hierarchy in OTEL exporters.
+
+```ts
+const handler = new DarwinCallbackHandler({
+  nodeMap: { research: "researcher" },
+  onTrajectory: (event) => {
+    const attrs = toOtelAttributes(event.trajectory);
+    const span = tracer.startSpan(event.nodeName, {
+      attributes: { ...attrs, "darwin.run.id": event.runId },
+    });
+    // event.parentRunId can be used as the parent context for span linking
+    span.end();
+  },
+});
+```
+
+`withDarwinEvolution` legacy events do NOT carry the runId fields (no
+runId exists in the monkey-patch path). Migrate to
+`DarwinCallbackHandler` if you need them.
+
+### Double-wrap warning on `withDarwinEvolution`
+
+A `Symbol.for("darwin-langgraph.evolution.wrapped")` sentinel is now
+stamped on each wrapped graph. A second `withDarwinEvolution(graph, …)`
+call on the same graph instance emits a one-shot `console.warn`:
+
+```
+[darwin-langgraph] withDarwinEvolution(): graph appears to be wrapped twice
+  — both hooks will fire per run, producing duplicate trajectories.
+```
+
+Some users legitimately layer multiple `nodeMap` slices on one graph,
+so the wrap still succeeds — but the silent-double-fire footgun is now
+visible in logs. To layer cleanly, prefer multiple
+`DarwinCallbackHandler` instances via `callbacks: [h1, h2]`.
+
+### Hung-invoke guard on `DarwinCallbackHandler`
+
+New option `maxInFlightRuns?: number` on
+`DarwinCallbackHandlerOptions`. Caps the internal `runId → InFlightRun`
+map at the configured size. When the cap is exceeded, the oldest
+entry is evicted (Map insertion order) and a one-shot warning fires.
+Defaults to **1024** — large enough for typical fan-out, small enough
+to surface a real leak within minutes of an incident.
+
+```ts
+const handler = new DarwinCallbackHandler({
+  nodeMap: { research: "researcher" },
+  onTrajectory: (event) => { /* ... */ },
+  maxInFlightRuns: 500,  // tighter for memory-constrained workers
+});
+```
+
+Set `maxInFlightRuns: Infinity` to opt out (discouraged in production).
+
+This defends against the failure mode where `handleChainEnd` /
+`handleChainError` never fires (LangGraph internal bug, OS-level kill
+of the worker mid-invoke, parent invoke aborted mid-flight). Without
+the cap, the map grows without bound and leaks memory in long-running
+processes (server singletons, schedulers, Temporal Workers).
+
+### V0.2 — new surfaces (still LIVE)
 
 V0.2 ships the three items from the V0.1 V0.2-roadmap, plus runtime
 deprecation warnings on the legacy wrapper:
@@ -255,6 +332,17 @@ Two lines:
 `DarwinEvolutionOptions`, `DarwinNodeMapEntry`, and the
 `DarwinTrajectoryEvent` shape passed to `onTrajectory` are 100% identical
 between both APIs — no other code changes required.
+
+## Migration from v0.2.x to v0.3.x
+
+**No code changes required.** V0.3 is purely additive:
+
+- `event.runId` and `event.parentRunId` are new optional fields — existing
+  callbacks that don't read them keep working untouched.
+- The double-wrap warning only fires if you actually double-wrap (most
+  users do not).
+- The default `maxInFlightRuns: 1024` is invisible in normal use. Override
+  only if you have memory pressure or want to opt out via `Infinity`.
 
 The adapter releases follow `darwin-agents` major bumps. When
 `@langchain/langgraph` 2.x lands, the adapter ships a new major within

@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: build + test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Root engines.node says ">=20". We exercise 20 + 22 to catch
+        # version-specific regressions in @langchain/langgraph + vitest.
+        node-version: [20, 22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      # `npm ci` is preferred over `npm install` for reproducible CI runs.
+      # The lockfile is committed and pins all @langchain/langgraph +
+      # darwin-agents (peer-dev) + vitest + tsx + typescript versions.
+      - name: Install dependencies
+        run: npm ci
+
+      # Version-sync gate first — fails fast if package.json and
+      # src/index.ts VERSION drift apart. Same script runs in
+      # prepublishOnly, mirroring CI gates locally for contributors.
+      - name: Verify version sync
+        run: npm run verify:version-sync
+
+      # tsc strict — catches type errors vitest run wouldn't (vitest
+      # transpiles with esbuild and skips type-checking).
+      - name: Type-check (src + tests)
+        run: npm run typecheck
+
+      # tsc strict — examples must compile cleanly too. examples/ are
+      # consumer-facing reference code; if they break the consumer
+      # experience is broken.
+      - name: Type-check (examples)
+        run: npm run examples:check
+
+      # vitest run executes all *.test.ts files. Real @langchain/langgraph
+      # internals are exercised; only the `runAgent` boundary from
+      # darwin-agents is mocked. 132/132 expected green as of v0.3.0-alpha.1.
+      - name: Run tests
+        run: npm test
+
+      # Build dist/ — final gate so a release PR is publish-ready when
+      # the tag goes out.
+      - name: Build dist/
+        run: npm run build
