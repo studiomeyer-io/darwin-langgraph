@@ -78,6 +78,22 @@ export interface DarwinTrajectoryEvent {
    * NEW V0.3 (S1187).
    */
   parentRunId?: string;
+  /**
+   * `true` when the trajectory's serialised size exceeded the configured
+   * `maxTrajectoryBytes` cap and was replaced with a structurally
+   * compatible BUT minimal stub by {@link DarwinCallbackHandler}. The
+   * stub preserves `version`, all aggregate counts (`turnCount` /
+   * `textBlockCount` / `mcpInvocations`), `capturedAt`, and any captured
+   * `tokenUsage`, but replaces `toolCalls` and `errors` with empty
+   * arrays. Use this flag to branch on degraded payloads in OTEL exporters
+   * or alerting.
+   *
+   * Omitted (not `false`) when the trajectory passed through unchanged
+   * — consumers should treat the absence of the field as "intact".
+   *
+   * NEW V0.4 (S1235).
+   */
+  trajectoryTruncated?: boolean;
 }
 
 /** Options for {@link withDarwinEvolution}. */
@@ -253,7 +269,17 @@ export function withDarwinEvolution<G extends InvokableGraph>(
 
     for (const [nodeName, { agentName, trajectoryKey }] of resolved) {
       const trajectory = stateObj[trajectoryKey] as ExecutionTrace | undefined;
-      if (!trajectory || typeof trajectory !== "object" || trajectory.version !== 1) {
+      // R2 self-check (S1235): mirror the forward-compat `version >= 1`
+      // gate used by `isExecutionTrace` and the accumulator reducer.
+      // The legacy `withDarwinEvolution` wrapper would otherwise
+      // silently drop v=2 trajectories that the new code paths emit.
+      if (
+        !trajectory ||
+        typeof trajectory !== "object" ||
+        typeof (trajectory as { version?: unknown }).version !== "number" ||
+        !Number.isFinite((trajectory as { version: number }).version) ||
+        (trajectory as { version: number }).version < 1
+      ) {
         continue;
       }
       try {

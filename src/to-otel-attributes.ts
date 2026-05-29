@@ -53,6 +53,55 @@ export interface ToOtelAttributesOptions {
    * Override for organisation-wide naming conventions (e.g. `"company.darwin"`).
    */
   customNamespace?: string;
+  /**
+   * V0.4 — LangGraph node name. Emits `gen_ai.langgraph.node` per the
+   * Coralogix / Last9 / Honeycomb convention for LangGraph instrumentation.
+   *
+   * Pass `event.nodeName` from {@link DarwinTrajectoryEvent} to populate.
+   *
+   * NEW V0.4 (S1235).
+   */
+  langGraphNode?: string;
+  /**
+   * V0.4 — LangGraph step counter for this node execution. Emits
+   * `gen_ai.langgraph.step`. Optional — LangGraph does not always surface
+   * the step counter through callbacks; consumers who track it can
+   * forward it here.
+   *
+   * NEW V0.4 (S1235).
+   */
+  langGraphStep?: number;
+  /**
+   * V0.4 — End-user id (the authenticated user the request was made on
+   * behalf of). Emits the OTel cross-cutting `enduser.id` attribute
+   * (the canonical OTel general-semconv attribute for end-user identity)
+   * AND the historical alias `gen_ai.request.user` that older Coralogix /
+   * Last9 dashboards key off.
+   *
+   * R1 Research Finding 1 (S1235): the GenAI semconv registry does NOT
+   * define `gen_ai.request.user` or `gen_ai.user.id` — `enduser.id` from
+   * the cross-cutting attributes is the spec-correct key. We emit both
+   * so users on either dashboard convention keep working.
+   *
+   * NEW V0.4 (S1235).
+   */
+  userId?: string;
+  /**
+   * V0.4 — Conversation / thread id (typically the LangGraph
+   * `thread_id` from `config.configurable`). Emits the OTel
+   * `gen_ai.conversation.id` attribute (canonical spec key for grouping
+   * spans into one logical conversation in Langfuse / Honeycomb).
+   *
+   * NEW V0.4 (S1235).
+   */
+  conversationId?: string;
+  /**
+   * V0.4 — Custom request id (correlates with upstream HTTP request
+   * tracing). Emits `gen_ai.request.id`. Optional.
+   *
+   * NEW V0.4 (S1235).
+   */
+  requestId?: string;
 }
 
 /** Flat attribute bag matching OTEL's primitive-only attribute types. */
@@ -91,9 +140,20 @@ export function toOtelAttributes(
   trajectory: ExecutionTrace,
   opts: ToOtelAttributesOptions = {},
 ): OtelAttributes {
-  if (!trajectory || typeof trajectory !== "object" || trajectory.version !== 1) {
+  // R2 MUST-FIX (S1235): forward-compat — accept `version >= 1` to
+  // match the R1 P0-2 widening in `isExecutionTrace` and the
+  // accumulator reducer. A v=2 trajectory that passed both upstream
+  // gates would otherwise crash here. Same structural guard as
+  // `isExecutionTrace`.
+  if (
+    !trajectory ||
+    typeof trajectory !== "object" ||
+    typeof (trajectory as { version?: unknown }).version !== "number" ||
+    !Number.isFinite((trajectory as { version: number }).version) ||
+    (trajectory as { version: number }).version < 1
+  ) {
     throw new TypeError(
-      `toOtelAttributes: trajectory must be an ExecutionTrace with version=1, got ${
+      `toOtelAttributes: trajectory must be an ExecutionTrace with version>=1, got ${
         trajectory === null ? "null" : typeof trajectory
       }`,
     );
@@ -108,6 +168,38 @@ export function toOtelAttributes(
 
   if (opts.agentName) attrs["gen_ai.agent.name"] = opts.agentName;
   if (opts.agentId) attrs["gen_ai.agent.id"] = opts.agentId;
+
+  // V0.4 (S1235): LangGraph-specific attributes per Coralogix / Last9 /
+  // Honeycomb 2026 convention for LangGraph instrumentation. Emitted
+  // alongside the canonical gen_ai attrs so dashboards that filter by
+  // `gen_ai.langgraph.node` (one bar per node) work out-of-box.
+  if (typeof opts.langGraphNode === "string" && opts.langGraphNode.length > 0) {
+    attrs["gen_ai.langgraph.node"] = opts.langGraphNode;
+  }
+  if (
+    typeof opts.langGraphStep === "number" &&
+    Number.isFinite(opts.langGraphStep) &&
+    opts.langGraphStep >= 0
+  ) {
+    attrs["gen_ai.langgraph.step"] = opts.langGraphStep;
+  }
+  if (typeof opts.userId === "string" && opts.userId.length > 0) {
+    // R1 Research 1 fix (S1235): emit the OTel-spec-canonical
+    // `enduser.id` AND the historical alias `gen_ai.request.user` that
+    // older Coralogix / Last9 dashboards key off, so both consumer
+    // conventions keep working.
+    attrs["enduser.id"] = opts.userId;
+    attrs["gen_ai.request.user"] = opts.userId;
+  }
+  if (
+    typeof opts.conversationId === "string" &&
+    opts.conversationId.length > 0
+  ) {
+    attrs["gen_ai.conversation.id"] = opts.conversationId;
+  }
+  if (typeof opts.requestId === "string" && opts.requestId.length > 0) {
+    attrs["gen_ai.request.id"] = opts.requestId;
+  }
 
   // Token usage — only emit when provider reported FINITE numbers. NaN
   // and Infinity pass `typeof === "number"` but OTEL exporters drop

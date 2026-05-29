@@ -72,7 +72,24 @@ console.log(result.output);
 console.log("trajectory:", result.darwinTrajectory);
 ```
 
-## Three surfaces
+## Surfaces (V0.4 — 11 total)
+
+V0.4 adds six new surfaces on top of the V0.3 baseline. Every addition
+is additive — existing V0.3 code keeps working. The full list:
+
+| # | Name | When to use |
+|---|---|---|
+| 1 | `createDarwinNode(agent, opts?)` | Wrap one Darwin agent as a `StateGraph` node. |
+| 2 | `darwinAnnotation(extra?)` | Annotation with `task` + `output` + singleton `darwinTrajectory` channel. |
+| 3 | `withDarwinEvolution(graph, opts)` *(deprecated since V0.2)* | Legacy monkey-patch wrapper — migrate to `DarwinCallbackHandler`. |
+| 4 | `DarwinCallbackHandler` *(V0.2)* | LangChain-native callback handler with `onTrajectory` + V0.4 `onToolEvent` + V0.4 `maxTrajectoryBytes`. |
+| 5 | `toOtelAttributes(trajectory, opts?)` *(V0.2)* | Map an `ExecutionTrace` to OpenTelemetry GenAI Semantic Conventions attributes. V0.4 adds `langGraphNode` / `langGraphStep` / `userId` / `conversationId` / `requestId`. |
+| 6 | `darwinMessagesAnnotation(extra?)` *(V0.2)* | Annotation with a `messages` channel for `createReactAgent` interop. |
+| 7 | `darwinAccumulatingAnnotation(extra?)` *(V0.4)* | Annotation with an accumulating `darwinTrajectories: ExecutionTrace[]` channel — every node write appends instead of overwriting. |
+| 8 | `createTokenBudgetCallbacks(opts)` *(V0.4)* | Production guard — throws `DarwinTokenBudgetExceededError` when a per-invocation token budget is breached. |
+| 9 | `toW3CTraceContext(event, opts?)` *(V0.4)* | Pure mapper to a W3C `traceparent` header value for cross-process span correlation. |
+| 10 | `MAX_KNOWN_TRACE_VERSION` *(V0.4 const)* | Highest `ExecutionTrace.version` this adapter natively understands; `isExecutionTrace` warns once on higher versions but emits them anyway. |
+| 11 | Error classes | `DarwinNodeError` + `DarwinEvolutionHookError` + V0.4 `DarwinTokenBudgetExceededError`. |
 
 ### 1. `createDarwinNode(agent, opts?)`
 

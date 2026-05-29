@@ -104,9 +104,17 @@ describe("toOtelAttributes — token usage (sparse)", () => {
 });
 
 describe("toOtelAttributes — invalid input", () => {
-  it("throws TypeError on trajectory with wrong version", () => {
+  it("accepts v=2 trajectory (R2 forward-compat — was strict before)", () => {
+    // V0.4 R2 fix (S1235): forward-compat per the same widening that
+    // `isExecutionTrace` and `darwinTrajectoryAccumulatorReducer` got.
     expect(() =>
       toOtelAttributes({ ...baseTrace, version: 2 as unknown as 1 }),
+    ).not.toThrow();
+  });
+
+  it("throws TypeError on version below 1", () => {
+    expect(() =>
+      toOtelAttributes({ ...baseTrace, version: 0 as unknown as 1 }),
     ).toThrow(TypeError);
   });
 

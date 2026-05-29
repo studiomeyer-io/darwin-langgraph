@@ -59,12 +59,16 @@ export {
 } from "./with-darwin-evolution.js";
 
 // V0.2 — LangChain-native callback handler (preferred over `withDarwinEvolution`)
+// V0.4 — extended with onToolEvent + maxTrajectoryBytes + MAX_KNOWN_TRACE_VERSION
 export {
   DarwinCallbackHandler,
+  MAX_KNOWN_TRACE_VERSION,
   type DarwinCallbackHandlerOptions,
+  type DarwinToolEvent,
 } from "./darwin-callback-handler.js";
 
 // V0.2 — OTEL GenAI Semantic Conventions mapping
+// V0.4 — extended with langGraphNode / langGraphStep / userId / requestId
 export {
   toOtelAttributes,
   toolCallToOtelAttributes,
@@ -79,7 +83,37 @@ export {
   getMessagesChannelSpec,
 } from "./darwin-messages-annotation.js";
 
-export { DarwinNodeError, DarwinEvolutionHookError } from "./errors.js";
+// V0.4 — accumulating annotation for graphs that fan-out multiple Darwin nodes
+export {
+  darwinAccumulatingAnnotation,
+  getDarwinAccumulatingChannelSpec,
+  darwinTrajectoryAccumulatorReducer,
+} from "./darwin-accumulating-annotation.js";
+
+// V0.4 — token-budget callbacks (production guard against runaway agents)
+export {
+  TokenBudgetCallbackHandler,
+  createTokenBudgetCallbacks,
+  type TokenBudgetOptions,
+  type TokenBudgetExceedInfo,
+  type TokenBudgetTickInfo,
+} from "./token-budget.js";
+
+// V0.4 — W3C Trace Context mapper for cross-process span correlation
+export {
+  toW3CTraceContext,
+  type ToW3CTraceContextOptions,
+  type W3CTraceContext,
+} from "./to-w3c-trace-context.js";
+
+// V0.4 — createDarwinNode runtime info passthrough
+export type { DarwinNodeAttemptInfo } from "./create-darwin-node.js";
+
+export {
+  DarwinNodeError,
+  DarwinEvolutionHookError,
+  DarwinTokenBudgetExceededError,
+} from "./errors.js";
 
 export type {
   AgentDefinition,
@@ -93,4 +127,4 @@ export type {
 } from "./types.js";
 
 /** Adapter version — sync with `package.json` on every release. */
-export const VERSION = "0.3.0-alpha.1";
+export const VERSION = "0.4.0-alpha.1";

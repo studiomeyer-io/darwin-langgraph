@@ -90,6 +90,44 @@ export interface DarwinRunOptionsPassthrough {
 }
 
 /**
+ * V0.4 (S1235) — runtime info surfaced from the LangGraph `RunnableConfig`
+ * for the `onAttempt` callback. Lets consumers branch on retries (e.g.
+ * fall back to a cheaper model after the first attempt fails — the
+ * canonical LangGraph retryPolicy pattern from
+ * langchain.com/oss/javascript/langgraph/use-graph-api#access-execution-info-inside-a-node).
+ *
+ * `nodeAttempt` is `1` for the first execution; if a retry policy is
+ * attached via `addNode("name", fn, { retryPolicy })` and the node
+ * throws, LangGraph re-fires with `nodeAttempt = 2`, etc.
+ *
+ * NEW V0.4 (S1235).
+ */
+export interface DarwinNodeAttemptInfo {
+  /** Current attempt number (1-indexed, increments per retry). */
+  nodeAttempt: number;
+  /**
+   * LangGraph step counter for this node execution within the graph
+   * run. Read from `config.metadata.langgraph_step` (the canonical
+   * 1.3.x source) — R1 Research Finding 2 (S1235) corrected the
+   * source: it is metadata, NOT `executionInfo`.
+   */
+  langGraphStep?: number;
+  /**
+   * V0.4 (R1 Research Finding 2, S1235) — first-attempt timestamp as
+   * ISO 8601 string when LangGraph surfaces it. Useful to compute
+   * retry-attempt latency in fallback paths. Read from
+   * `config.runtime.executionInfo.nodeFirstAttemptTime` per
+   * LangGraph PR #7363 — value may be `null` on Platform-managed
+   * graphs (PR #7406 workaround).
+   */
+  nodeFirstAttemptTime?: string;
+  /** LangGraph thread id (from `config.configurable.thread_id`). */
+  threadId?: string;
+  /** Raw runtime info object — passed through for power-users. */
+  raw: Record<string, unknown> | undefined;
+}
+
+/**
  * Options accepted by {@link createDarwinNode}.
  *
  * All keys are optional. Defaults match the channel names returned by
@@ -127,6 +165,24 @@ export interface CreateDarwinNodeOptions {
    * break the LangGraph node.
    */
   onResult?: (result: RunResult) => void | Promise<void>;
+  /**
+   * V0.4 — Fired before `runAgent` with the runtime info LangGraph
+   * surfaces via `config.runtime.executionInfo`. Use this to:
+   *   - Log retry behaviour (`nodeAttempt > 1` means LangGraph's
+   *     retryPolicy decided to retry).
+   *   - Switch to a cheaper / faster fallback model on retries
+   *     (mutate `runOptions` via closure capture).
+   *   - Forward step / thread context to upstream tracing systems.
+   *
+   * Pairs naturally with LangGraph's `addNode(name, fn, { retryPolicy })`
+   * — the adapter does NOT add its own retry layer (would conflict).
+   *
+   * **Errors are swallowed** with a one-shot warn per node, same contract
+   * as `onResult`.
+   *
+   * NEW V0.4 (S1235).
+   */
+  onAttempt?: (info: DarwinNodeAttemptInfo) => void | Promise<void>;
 }
 
 /**
@@ -183,13 +239,15 @@ export function createDarwinNode(
   const captureTrace = opts.captureTrace !== false;
   const agentName = agent.name;
   const onResult = opts.onResult;
+  const onAttempt = opts.onAttempt;
   const runOptions = opts.runOptions ?? {};
 
   // Track whether we already warned about a swallowed callback so the
   // log stays at most one line per node, not one per invocation.
   let onResultWarned = false;
+  let onAttemptWarned = false;
 
-  return async function darwinNode(state) {
+  return async function darwinNode(state, config) {
     if (state === null || typeof state !== "object") {
       throw new DarwinNodeError(
         `createDarwinNode(${agentName}): state must be an object, got ${typeof state}.`,
@@ -204,6 +262,72 @@ export function createDarwinNode(
           `got ${rawTask === undefined ? "undefined" : typeof rawTask}.`,
         agentName,
       );
+    }
+
+    // V0.4 (S1235): surface LangGraph runtime info to the optional
+    // onAttempt callback. The shape of `config.runtime.executionInfo` is
+    // defined in @langchain/langgraph 1.3+ via PR #7363 (2026-03-31).
+    //
+    // R1 Research Finding 2 fix (S1235): `langGraphStep` does NOT live
+    // on `executionInfo` — it is in `config.metadata.langgraph_step`.
+    // `executionInfo` carries `nodeAttempt` and `nodeFirstAttemptTime`
+    // among other identifiers. We read both defensively so older
+    // LangGraph versions don't crash this node.
+    if (onAttempt && config && typeof config === "object") {
+      const c = config as Record<string, unknown>;
+      const runtime = c.runtime as Record<string, unknown> | undefined;
+      const executionInfo = runtime?.executionInfo as
+        | {
+            nodeAttempt?: unknown;
+            nodeFirstAttemptTime?: unknown;
+          }
+        | undefined;
+      const metadata = c.metadata as Record<string, unknown> | undefined;
+      const configurable = c.configurable as
+        | { thread_id?: unknown }
+        | undefined;
+      const nodeAttempt =
+        typeof executionInfo?.nodeAttempt === "number" &&
+        Number.isFinite(executionInfo.nodeAttempt) &&
+        executionInfo.nodeAttempt >= 1
+          ? executionInfo.nodeAttempt
+          : 1;
+      // R1 Research Finding 2: langgraph_step lives in metadata.
+      const rawStep = metadata?.["langgraph_step"];
+      const langGraphStep =
+        typeof rawStep === "number" && Number.isFinite(rawStep)
+          ? rawStep
+          : undefined;
+      // R1 Research Finding 2: nodeFirstAttemptTime from executionInfo.
+      const rawFirstAttempt = executionInfo?.nodeFirstAttemptTime;
+      const nodeFirstAttemptTime =
+        typeof rawFirstAttempt === "string" && rawFirstAttempt.length > 0
+          ? rawFirstAttempt
+          : undefined;
+      const threadId =
+        typeof configurable?.thread_id === "string"
+          ? configurable.thread_id
+          : undefined;
+      try {
+        await onAttempt({
+          nodeAttempt,
+          ...(langGraphStep !== undefined ? { langGraphStep } : {}),
+          ...(nodeFirstAttemptTime !== undefined
+            ? { nodeFirstAttemptTime }
+            : {}),
+          ...(threadId !== undefined ? { threadId } : {}),
+          raw: runtime,
+        });
+      } catch (err) {
+        if (!onAttemptWarned) {
+          onAttemptWarned = true;
+          console.warn(
+            `[darwin-langgraph] onAttempt callback for "${agentName}" threw — ` +
+              `swallowed. Subsequent throws will be silent. Original error: ` +
+              `${(err as Error)?.message ?? String(err)}`,
+          );
+        }
+      }
     }
 
     let result: RunResult;

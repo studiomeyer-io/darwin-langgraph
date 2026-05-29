@@ -3,6 +3,249 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0-alpha.1] — 2026-05-29
+
+V0.4 is an additive release that closes the V0.3 R2 deferrals and lands
+nine new surfaces driven by a research sweep across LangGraph 1.3, the
+OpenTelemetry GenAI Semantic Conventions registry, and the LangGraph
+TypeScript Production Guide. **Zero breaking changes** — every existing
+V0.3 consumer keeps working unchanged.
+
+### Added — nine new surfaces
+
+- **`DarwinCallbackHandler.onToolEvent`** — new option that fires for
+  every LangGraph tool-chain start / end / error inside a tracked node.
+  Emits a `DarwinToolEvent` (`phase: "start" | "end" | "error"`) with
+  `toolName`, `runId`, `parentRunId`, plus `input` / `output` / `error`
+  depending on phase. Use it to emit per-tool OTEL spans, drive progress
+  UIs, or wire abort-on-tool-failure logic. The handler now also caches
+  tool names internally so end / error events get the same name the
+  start event reported, even when the LangChain tool-end signature does
+  not carry the name (LangChain 0.3 quirk).
+- **`DarwinCallbackHandler` `maxTrajectoryBytes`** — soft cap (default
+  `262_144` = 256 KiB) on the serialised trajectory size emitted via
+  `onTrajectory`. Oversized trajectories are replaced with a
+  structurally-compatible BUT minimal stub (counts + `capturedAt` +
+  `tokenUsage` preserved, `toolCalls` / `errors` replaced with empty
+  arrays). The event payload gains a new `trajectoryTruncated: true`
+  field so consumers can branch. Circular-reference trajectories are
+  caught defensively and treated as oversized. `tokenUsage` is shallow-
+  copied and `bigint` token counters are coerced to `number` so
+  downstream `JSON.stringify` never trips.
+- **`MAX_KNOWN_TRACE_VERSION` + forward-compat `isExecutionTrace`** —
+  the handler now accepts `version >= 1` and warns once per process when
+  a higher-than-known version is observed. The accumulator reducer,
+  `withDarwinEvolution`, and `toOtelAttributes` all share the same
+  widening so a future `darwin-agents` schema bump does not silently
+  drop trajectories anywhere on the pipeline.
+- **`toOtelAttributes` LangGraph + OTel cross-cutting attributes** —
+  four new options. `langGraphNode` and `langGraphStep` emit
+  `gen_ai.langgraph.node` / `gen_ai.langgraph.step` per the Coralogix /
+  Last9 / Honeycomb LangGraph instrumentation convention. `userId` emits
+  BOTH the OTel-spec-canonical `enduser.id` (cross-cutting) AND the
+  historical alias `gen_ai.request.user` so dashboards on either
+  convention keep working. `conversationId` emits the spec-correct
+  `gen_ai.conversation.id` (typically the LangGraph `thread_id`).
+  `requestId` emits `gen_ai.request.id`.
+- **`createDarwinNode.onAttempt`** — config-aware passthrough that
+  fires before `runAgent` with the runtime info LangGraph surfaces.
+  Reads `nodeAttempt` from `config.runtime.executionInfo` (per
+  LangGraph PR #7363, surfacing `1` on first execution and incrementing
+  per retry under an `addNode(name, fn, { retryPolicy })` policy),
+  `nodeFirstAttemptTime` from the same source (per PR #7363 for
+  retry-latency computation), `langGraphStep` from
+  `config.metadata.langgraph_step` (the canonical LangGraph 1.3 source —
+  NOT `executionInfo`), and `threadId` from `config.configurable.thread_id`.
+  Pairs naturally with LangGraph's native `retryPolicy` without adding
+  a competing retry layer.
+- **`darwinAccumulatingAnnotation`** + **`darwinTrajectoryAccumulatorReducer`**
+  + **`getDarwinAccumulatingChannelSpec`** — variant of `darwinAnnotation`
+  that replaces the singleton `darwinTrajectory: ExecutionTrace | undefined`
+  channel with an accumulating `darwinTrajectories: ExecutionTrace[]`
+  channel. Use it when you orchestrate multiple Darwin nodes in a graph
+  (fan-out, sequential pipeline, supervisor) and want every trajectory
+  preserved in state without declaring a per-node trace channel by
+  hand. The reducer accepts a single `ExecutionTrace` (matching the
+  bare `createDarwinNode` contract) or `ExecutionTrace[]` (batch
+  append) and drops non-`version >= 1` shapes defensively. The
+  annotation throws when the optional `extra` argument tries to redefine
+  one of the Darwin-managed channels (`task`, `output`,
+  `darwinTrajectories`) — a previously silent contract footgun.
+- **`createTokenBudgetCallbacks(opts)`** + **`TokenBudgetCallbackHandler`**
+  + **`DarwinTokenBudgetExceededError`** — production-pattern from the
+  LangGraph TypeScript Production Guide. Enforces a per-invocation
+  token budget across all LLM calls inside the graph. Extracts tokens
+  from `output.llmOutput.tokenUsage.totalTokens` (LangChain canonical
+  for ChatOpenAI / ChatAnthropic) and falls back to summing per-message
+  `generations[][].message.usage_metadata` (Anthropic native + others).
+  Throws the typed `DarwinTokenBudgetExceededError` on breach so
+  callers can `instanceof`-check without parsing message text.
+  `awaitHandlers = true` so LangChain awaits the handler and the
+  synchronous throw reliably reaches the `graph.invoke` caller.
+  Constructor validates the budget is a finite positive integer
+  (NaN / Infinity / 0 / negative / non-integer all throw eagerly).
+- **`toW3CTraceContext(event, opts?)`** — pure mapper from
+  `DarwinTrajectoryEvent` to a [W3C Trace Context](https://www.w3.org/TR/trace-context/)
+  `traceparent` header value (`00-<32hex>-<16hex>-(00|01)`). When the
+  event has no `parentRunId`, the spanId is taken from the SECOND 16
+  hex of the runId so it is never a prefix of the traceId — several
+  OTEL backends (Datadog APM, Honeycomb classic) reject or misroute
+  spans whose ids look like self-parents. When the event has a valid
+  `parentRunId`, the traceId is taken from the parent and the spanId
+  from the first 16 hex of the runId. Returns `undefined` for malformed
+  / non-UUID runIds and for the all-zero strings the W3C spec forbids.
+- **Example 04 — OTEL + W3C + token budget**
+  (`examples/04-otel-and-budget.ts`). End-to-end wiring of every new
+  V0.4 surface against a console-only span emitter so the example
+  runs without external services; swap in a real OTLP exporter or
+  Langfuse SDK at the marked line.
+
+### Added — error class
+
+- **`DarwinTokenBudgetExceededError`** — thrown by
+  `TokenBudgetCallbackHandler` on breach AND eagerly on construction
+  when the configured budget is invalid. Exposes `budget`, `totalTokens`,
+  and `providerHint` (`modelName` / `model_name` extracted from the
+  LLMResult when present) so callers can branch on cost / provider.
+
+### Changed
+
+- **`DarwinTrajectoryEvent` extended** with optional `trajectoryTruncated`
+  field — set to `true` when `DarwinCallbackHandler.maxTrajectoryBytes`
+  replaces the trajectory with a stub. Omitted (not `false`) when the
+  trajectory passed through unchanged.
+- **`InFlightRun` shape** in `DarwinCallbackHandler` — internal change,
+  the `runIdToName` map now stores `{ nodeName, parentRunId, pendingTools,
+  finalized }`. The two new fields drive the R1 P1-4 fix that keeps
+  chain entries alive past `handleChainEnd` until pending tool events
+  have surfaced so `onToolEvent` callbacks for late-completing tools
+  are no longer silently dropped.
+- **VERSION constant bumped** to `0.4.0-alpha.1` in both `package.json`
+  and `src/index.ts` (verified by `prepublishOnly` script).
+
+### Fixed (R1 + R2 code-review-loop pre-publish)
+
+A three-agent R1 review (Critic + Analyst + Research) followed by an
+R2 critic verification + R3 grep self-check surfaced and closed ten
+issues before publish:
+
+- **P0-1 — W3C trace context self-parent collision.** Top-level
+  invokes derived BOTH `traceId` and `spanId` from the first 16 chars
+  of the same UUID, producing `traceparent` headers where the spanId
+  was a prefix of the traceId. Several OTEL backends reject those as
+  self-parents. Fix: when no `parentRunId`, `spanId = runHex.slice(16, 32)`.
+- **P0-2 — Forward-compat version drift.** The accumulator reducer
+  strict-equality-checked `version === 1` while `isExecutionTrace`
+  accepted `version >= 1`. The same widening was also missed in
+  `toOtelAttributes` and the legacy `withDarwinEvolution` wrapper.
+  All four sites now share the same `version >= 1 && Number.isFinite`
+  gate so a v=2 trajectory flows through every code path consistently.
+- **P1-1 — Tool name lost between start and end.** `handleToolEnd`
+  tried to read `output.name`, which is absent for the common
+  `ToolNode` case (output is a plain string). Fix: cache the name
+  from `handleToolStart` keyed by tool runId; consume it in
+  `handleToolEnd` / `handleToolError`. Falls back to `output.name`
+  when the start was missed.
+- **P1-2 — `buildTruncatedTrace` aliased original `tokenUsage`.**
+  The stub kept a reference to the original (potentially `bigint`-
+  carrying) `tokenUsage` object, breaking downstream `JSON.stringify`.
+  Fix: shallow copy via `Object.fromEntries(Object.entries(...))` and
+  coerce `bigint` values to `number`.
+- **P1-4 — Pending tool events vs `handleChainEnd` race.** Chains
+  with long-running tools sometimes saw `handleChainEnd` synchronously
+  delete the `runIdToName` entry before the matching
+  `handleToolEnd` / `handleToolError` arrived. Fix: reference-count
+  pending tools per chain (`InFlightRun.pendingTools`). `handleChainEnd`
+  marks the entry `finalized` instead of deleting it; the last tool
+  callback drains a deferred trajectory dispatch and cleans up.
+- **Research-1 — `gen_ai.request.user` is not OTel-canonical.** The
+  GenAI semconv registry defines `gen_ai.conversation.id` and the
+  cross-cutting `enduser.id` for user / session identity, not
+  `gen_ai.request.user`. Fix: emit both the canonical `enduser.id`
+  AND the historical alias `gen_ai.request.user` (older Coralogix /
+  Last9 dashboards key off the alias). New `conversationId` option
+  emits the spec-correct `gen_ai.conversation.id`.
+- **Research-2 — `langGraphStep` source path corrected.** LangGraph
+  1.3 surfaces the step counter in `config.metadata.langgraph_step`,
+  not `executionInfo.langGraphStep`. Fix: `createDarwinNode` reads
+  from the correct path and additionally surfaces
+  `nodeFirstAttemptTime` from `executionInfo` (per LangGraph PR
+  #7363) for retry-latency math.
+- **P2-2 — `darwinAccumulatingAnnotation` reserved-key silent
+  overwrite.** Passing `extra = { darwinTrajectories: customAnnotation }`
+  silently replaced the accumulator channel with no warning. Fix:
+  throws on any `extra` key that conflicts with `task` / `output` /
+  `darwinTrajectories`.
+- **P2-3 — `TokenBudgetCallbackHandler.awaitHandlers = false`.**
+  With `awaitHandlers = false` LangChain may not await the handler;
+  the synchronous throw inside `handleLLMEnd` could surface as an
+  unhandled rejection rather than aborting the graph. Fix:
+  `awaitHandlers = true` (the throw IS the abort signal).
+- **R2 MUST-FIX — `toOtelAttributes` strict version guard.** The R1
+  P0-2 widening was applied to the accumulator reducer and the
+  callback-handler `isExecutionTrace` but missed in `toOtelAttributes`
+  (which still threw `TypeError` on v=2 trajectories). The R2 critic
+  caught it; the same forward-compat guard now lives in all four
+  trajectory consumers.
+
+### Test coverage
+
+- **241/241 vitest tests green** (was 132 in V0.3, **+109 V0.4 tests**
+  across `tests/token-budget.test.ts`, `tests/to-w3c-trace-context.test.ts`,
+  `tests/darwin-accumulating-annotation.test.ts`, `tests/v04-features.test.ts`,
+  `tests/r1-v04-fixes.test.ts`).
+- New regression-test file `tests/r1-v04-fixes.test.ts` (28 tests across
+  10 R1+R2 fix groups) pins each fix so a future patch cannot regress
+  the corrected behaviour silently.
+- `tsc --strict --noEmit` clean (src + examples).
+- `npm run build` clean — all V0.4 surface additions ship in `dist/`.
+
+### V0.5 backlog (deferred from R1 + R2)
+
+- **Per-tool size cap** alongside `maxTrajectoryBytes` (instead of the
+  per-trajectory level — surgical truncation of one fat tool result
+  rather than the whole agent).
+- **`gen_ai.provider.name` + `gen_ai.request.model` + `gen_ai.response.model`
+  + `gen_ai.response.finish_reasons`** — spec-required OTel GenAI
+  attributes V0.4 does not yet emit.
+- **`gen_ai.workflow.*` parallel emission** — Traceloop RFC #3460
+  proposes `gen_ai.workflow.current_node` as the canonical successor
+  to `gen_ai.langgraph.node`. Emit both during the transition.
+- **`gen_ai.usage.reasoning.output_tokens`** for Claude extended
+  thinking / Opus 4.x reasoning models.
+- **`gen_ai.usage.cache_*` rollup into the token-budget total** with
+  an `countCacheTokens?: boolean` flag — Anthropic prompt caching can
+  shift 90% of effective tokens into the cache bucket.
+- **Bedrock LLMResult shape** in `extractTokenDelta` (third branch
+  alongside ChatOpenAI canonical + per-message `usage_metadata`).
+- **`getMessagesAccumulatingChannelSpec`** + companion
+  `darwinMessagesAccumulatingAnnotation` for graphs mixing
+  `createReactAgent` with multi-Darwin fan-out.
+- **Explicit `@langchain/core` peer dep declaration** in `package.json`
+  (currently implicit via `@langchain/langgraph` peer dep).
+- **`MAX_KNOWN_TRACE_VERSION` migration to `darwin-agents`** — let the
+  upstream library own the constant so the adapter dependency drift
+  becomes a peer-dep semver failure rather than a runtime warn.
+- **`tools/list` notification handler** in `streamEvents` v3 — separate
+  V0.5 surface that fires on tool-list changes without polling.
+- **`tool_result` content-block streaming events** when LangGraph 1.4
+  surfaces them through the callback contract.
+
+### Migration from V0.3
+
+None required. V0.4 is additive. Existing consumers can adopt the new
+surfaces incrementally:
+
+- Adopt `DarwinCallbackHandler.onToolEvent` to emit per-tool spans.
+- Wrap `graph.invoke` with `createTokenBudgetCallbacks(...)` to enforce
+  a cost ceiling.
+- Pass `event` through `toW3CTraceContext(event)` and attach the
+  `traceparent` header to outgoing HTTP calls for cross-process span
+  correlation.
+- Swap `darwinAnnotation()` for `darwinAccumulatingAnnotation()` when
+  you orchestrate more than one Darwin node and want every trajectory
+  preserved.
+
 ## [0.3.0-alpha.1] — 2026-05-25
 
 V0.3 closes the three deferred items from V0.2's R2 review (parent-run
