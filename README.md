@@ -1,3 +1,7 @@
+<!-- studiomeyer-mcp-stack-banner:start -->
+> **Part of the [StudioMeyer MCP Stack](https://studiomeyer.io)** — Built in Mallorca 🌴 · ⭐ if you use it
+<!-- studiomeyer-mcp-stack-banner:end -->
+
 # darwin-langgraph
 
 > **LangGraph.js adapter for [`darwin-agents`](https://www.npmjs.com/package/darwin-agents).**
