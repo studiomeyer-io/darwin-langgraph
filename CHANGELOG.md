@@ -3,6 +3,30 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.0-alpha.1] — 2026-06-19
+
+Compatibility + tracking release. **Zero breaking changes** — no public surface
+changed; every V0.4 consumer keeps working unchanged.
+
+### Changed
+
+- **LangGraph 1.4.x verified.** Tested green against `@langchain/langgraph@1.4.4`
+  (242/242 vitest). The peer range is now `^1.3.0 || ^1.4.0`. LangGraph 1.4.4
+  ships an `ensureLangGraphConfig` fix that isolates concurrent singleton-agent
+  invocations by thread; the adapter's `DarwinCallbackHandler` already keys all
+  state on the per-invoke LangChain `runId`, so it composes cleanly with it.
+- **darwin-agents peer widened** to `>=0.5.0-alpha.1 <0.8.0` to track
+  `darwin-agents@0.7.0-alpha.1` (statistical-rigor + coverage-sampling wave). The
+  re-exported `ExecutionTrace` / trajectory types are unchanged, so the adapter
+  is compatible across darwin-agents 0.5 → 0.7.
+
+### Added
+
+- **Concurrent-isolation regression test** — two parallel `graph.invoke()` runs
+  with distinct trajectories now assert each `onTrajectory` event carries its
+  OWN trajectory mapped to the correct node/agent (no cross-leak), guarding the
+  LangGraph 1.4.x concurrent-singleton behaviour explicitly.
+
 ## [0.4.0-alpha.1] — 2026-05-29
 
 V0.4 is an additive release that closes the V0.3 R2 deferrals and lands

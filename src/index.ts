@@ -127,4 +127,4 @@ export type {
 } from "./types.js";
 
 /** Adapter version — sync with `package.json` on every release. */
-export const VERSION = "0.4.0-alpha.1";
+export const VERSION = "0.5.0-alpha.1";

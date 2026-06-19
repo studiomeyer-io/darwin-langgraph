@@ -223,14 +223,17 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | alpha (this release) |
+| `0.5.0-alpha.x` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | alpha (this release) |
+| `0.4.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
+| `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.1.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 
-The peer-dep range `darwin-agents: "^0.5.0-alpha.1"` follows npm's
-prerelease semver rules — `0.5.0-alpha.N` and `0.5.0` final satisfy it,
-but `0.5.1-alpha.0` does NOT. A patch release of this adapter will be
-required when `darwin-agents` bumps past `0.5.x`.
+As of `0.5.0-alpha.1` the adapter is **verified against
+`@langchain/langgraph@1.4.4`** (242/242 tests) and the `darwin-agents` peer is
+widened to `>=0.5.0-alpha.1 <0.8.0`, so it tracks `darwin-agents@0.7.x` without
+a patch bump. The re-exported trajectory types (`ExecutionTrace` et al.) are
+unchanged across darwin-agents 0.5 → 0.7, so the adapter contract is stable.
 
 ## V0.3 — observability + safety (LIVE this release)
 

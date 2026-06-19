@@ -204,6 +204,41 @@ describe("DarwinCallbackHandler — chain event dispatch", () => {
     expect(onTrajectory).toHaveBeenCalledTimes(2);
   });
 
+  it("concurrent invokes stay ISOLATED — no cross-leak of trajectory/node (LangGraph 1.4.x ensureLangGraphConfig)", async () => {
+    // Regression guard for LangGraph 1.4.4's concurrent-singleton isolation
+    // fix: two parallel invokes must each receive THEIR OWN trajectory, never
+    // a leaked sibling's. We give the two runs distinct trajectories (textBlock
+    // 1 vs 2) and assert the dispatched events carry both, each correctly
+    // mapped to the same node/agent — proving per-run isolation.
+    mockRunAgent
+      .mockResolvedValueOnce(result("a", 1))
+      .mockResolvedValueOnce(result("b", 2));
+    const events: Array<{ nodeName: string; agentName: string; n: number }> = [];
+    const handler = new DarwinCallbackHandler({
+      nodeMap: { research: "researcher" },
+      onTrajectory: (evt) =>
+        events.push({
+          nodeName: evt.nodeName,
+          agentName: evt.agentName,
+          n: evt.trajectory.textBlockCount,
+        }),
+    });
+    const g = buildGraph();
+    await Promise.all([
+      g.invoke({ task: "x" }, { callbacks: [handler] }),
+      g.invoke({ task: "y" }, { callbacks: [handler] }),
+    ]);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(events).toHaveLength(2);
+    // Both events map to the correct node/agent (no node-name leak).
+    expect(events.every((e) => e.nodeName === "research")).toBe(true);
+    expect(events.every((e) => e.agentName === "researcher")).toBe(true);
+    // The two DISTINCT trajectories both arrived (order-independent) — neither
+    // run saw the other's trajectory.
+    expect(events.map((e) => e.n).sort()).toEqual([1, 2]);
+  });
+
   it("skips when trajectory is missing in chain outputs", async () => {
     // Use captureTrace:false so the node never writes the trajectory.
     mockRunAgent.mockResolvedValueOnce(result("hello"));
