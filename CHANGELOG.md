@@ -3,10 +3,13 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
-## [0.5.0-alpha.1] — 2026-06-19
+## [0.5.0] — 2026-06-20
 
-Compatibility + tracking release. **Zero breaking changes** — no public surface
-changed; every V0.4 consumer keeps working unchanged.
+Compatibility + tracking release, promoted to `latest`. **Zero breaking
+changes** — no public surface changed; every V0.4 consumer keeps working
+unchanged. This is the first stable `latest` since 0.1.0-alpha.1: `npm i
+darwin-langgraph` now resolves to 0.5.0 (verified against LangGraph 1.4.4 and
+darwin-agents 0.7.0).
 
 ### Changed
 

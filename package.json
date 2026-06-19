@@ -1,6 +1,6 @@
 {
   "name": "darwin-langgraph",
-  "version": "0.5.0-alpha.1",
+  "version": "0.5.0",
   "description": "LangGraph.js adapter for darwin-agents — wrap self-evolving Darwin agents as StateGraph nodes with zero hard deps. V0.5 verifies LangGraph 1.4.x compatibility (concurrent-invoke isolation) and tracks darwin-agents 0.7. V0.4 added tool-event capture, OpenTelemetry GenAI LangGraph attributes, W3C trace context, token-budget enforcement, and an accumulating trajectory annotation.",
   "type": "module",
   "main": "./dist/index.js",
@@ -73,7 +73,6 @@
     "node": ">=20"
   },
   "publishConfig": {
-    "access": "public",
-    "tag": "alpha"
+    "access": "public"
   }
 }

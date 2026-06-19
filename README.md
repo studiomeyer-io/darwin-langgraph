@@ -223,7 +223,7 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.5.0-alpha.x` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | alpha (this release) |
+| `0.5.0` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | stable / `latest` (this release) |
 | `0.4.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
