@@ -7,7 +7,7 @@
 > **LangGraph.js adapter for [`darwin-agents`](https://www.npmjs.com/package/darwin-agents).**
 > Wrap self-evolving Darwin agents as `StateGraph` nodes — with zero hard deps.
 
-[![npm version](https://img.shields.io/npm/v/darwin-langgraph/alpha.svg)](https://www.npmjs.com/package/darwin-langgraph)
+[![npm version](https://img.shields.io/npm/v/darwin-langgraph.svg)](https://www.npmjs.com/package/darwin-langgraph)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 
 `darwin-langgraph` is a thin, peer-dependency-only bridge between two
@@ -30,7 +30,7 @@ evolve — install this adapter.
 ## Install
 
 ```bash
-npm install darwin-langgraph@alpha @langchain/langgraph darwin-agents@alpha
+npm install darwin-langgraph @langchain/langgraph darwin-agents
 ```
 
 Both `@langchain/langgraph` and `darwin-agents` are declared as
@@ -76,10 +76,11 @@ console.log(result.output);
 console.log("trajectory:", result.darwinTrajectory);
 ```
 
-## Surfaces (V0.4 — 11 total)
+## Surfaces (11 total)
 
-V0.4 adds six new surfaces on top of the V0.3 baseline. Every addition
-is additive — existing V0.3 code keeps working. The full list:
+The adapter exposes 11 public surfaces. Everything is additive across
+versions — older code keeps working. The full list (the table notes the
+version each surface landed in):
 
 | # | Name | When to use |
 |---|---|---|
@@ -411,20 +412,15 @@ delete process.env.ANTHROPIC_API_KEY; // enforce Max-Plan subscription
 
 ## Versioning
 
-Released under the `alpha` npm dist-tag in parallel with
-`darwin-agents@0.5.0-alpha.1`. Because `0.1.0-alpha.1` is the FIRST
-publish, npm assigns BOTH `alpha` and `latest` to it (npm rule: a
-package must always have a `latest` tag) — so `npm install
-darwin-langgraph` and `npm install darwin-langgraph@alpha` resolve to
-the same version right now. Once `0.1.0` final ships, `latest` will
-point to the stable release and `alpha` will continue to track
-pre-releases.
-
-For maximum clarity in alpha-stage projects, prefer the explicit
-opt-in form:
+`darwin-langgraph@0.5.0` is the current **stable** release on the
+`latest` dist-tag — `npm install darwin-langgraph` resolves to it (no
+`@alpha` needed). The adapter tracks `darwin-agents` and is verified
+against the latest `@langchain/langgraph` 1.x — see the compatibility
+matrix above. When `@langchain/langgraph` 2.x lands, the adapter ships a
+new major within the same minor of the underlying Darwin release.
 
 ```bash
-npm install darwin-langgraph@alpha @langchain/langgraph darwin-agents@alpha
+npm install darwin-langgraph @langchain/langgraph darwin-agents
 ```
 
 ## License

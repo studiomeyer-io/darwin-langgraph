@@ -3,6 +3,25 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] — 2026-06-21
+
+Documentation honesty patch — **no code changes** (`src/` is byte-for-byte
+0.5.0; 242 tests green). The install instructions and the version badge still
+pointed at the `@alpha` dist-tag, but both `darwin-langgraph` and
+`darwin-agents` have been stable on `latest` since 0.5.0 / 0.7.0 — following the
+old README installed outdated alpha builds.
+
+### Changed
+
+- **Install command** is now `npm install darwin-langgraph @langchain/langgraph
+  darwin-agents` — dropped the misleading `@alpha` suffix (both the intro and
+  the Versioning section).
+- **npm version badge** points at `latest`, not `/alpha`.
+- **Rewrote the "Versioning" section** — it described the first-publish state
+  where `alpha` and `latest` resolved to the same `0.1.0`; it now reflects
+  `0.5.0` being the stable `latest` release.
+- Surfaces header is version-neutral ("11 total") instead of "V0.4 — 11 total".
+
 ## [0.5.0] — 2026-06-20
 
 Compatibility + tracking release, promoted to `latest`. **Zero breaking
