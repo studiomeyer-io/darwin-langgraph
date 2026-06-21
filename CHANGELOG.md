@@ -3,6 +3,65 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] — 2026-06-21
+
+Correctness + tooling patch. **Zero breaking changes** — purely additive on
+the public surface; every 0.5.x consumer keeps working unchanged. Verified
+against `@langchain/langgraph@1.4.4` (current LangGraph.js API confirmed via
+the live docs, not memory) and the dev-pinned `darwin-agents@0.5.0-alpha.1`.
+
+### Added
+
+- **`runOptions.provider` passthrough on `createDarwinNode`.** `darwin-agents`
+  `RunOptions` has carried `provider?: LLMProvider` since `0.5.0-alpha.1`, but
+  the adapter's `DarwinRunOptionsPassthrough` interface never mirrored it — so
+  consumers could not inject a pre-constructed provider (custom base URL /
+  shared HTTP agent / test double) through a Darwin node. The field is now
+  forwarded verbatim to `runAgent`. New `tests/provider-passthrough.test.ts`
+  (4 tests: unit forwarding, forwarding alongside other options, no-invention
+  when omitted, StateGraph integration).
+- **`LLMProvider` re-export.** Re-exported from the barrel (and `src/types.ts`)
+  so consumers can type a `provider` from the single `darwin-langgraph` import,
+  matching the other `darwin-agents` type re-exports.
+- **Coverage tooling wired.** `vitest.config.ts` already declared a v8
+  coverage block, but `@vitest/coverage-v8` was not installed and there was no
+  script, so `vitest run --coverage` failed with a missing-dependency error.
+  Added `@vitest/coverage-v8` (dev-only, pinned to the `vitest` minor — it must
+  match the runner version), a `test:coverage` npm script, and a coverage step
+  in CI. Baseline coverage: ~95% statements / ~87% branches across `src/`. The
+  package still ships **zero runtime dependencies** (`npm ls --omit=dev
+  --omit=peer` is empty; `npm audit --omit=dev` reports 0 vulnerabilities).
+- **Public-surface guard.** New `tests/public-surface.test.ts` (24 tests) pins
+  every runtime barrel export (`typeof` per surface), asserts the exported
+  `VERSION` equals `package.json#version`, and checks the error classes are
+  real `Error` subclasses with their documented fields — so an accidental
+  rename or dropped re-export fails CI instead of breaking consumers silently.
+
+### Changed
+
+- **VERSION constant bumped** to `0.5.2` in both `package.json` and
+  `src/index.ts` (verified by `verify:version-sync`).
+- **README** documents the `provider` option (runOptions table row + a note)
+  and the refreshed compatibility matrix / versioning lead.
+- **`src/index.ts` doc** corrected from the stale "Three surfaces" line to
+  "11 surfaces" (the package has had 11 since V0.4).
+
+### Test coverage
+
+- **270/270 vitest tests green** (was 242 in 0.5.1, **+28**: 4 provider-
+  passthrough + 24 public-surface). No existing test weakened.
+- `tsc --strict` (src + examples) + `verify:version-sync` + `build` all clean.
+
+### Deferred
+
+- **Type-checking the `tests/` tree.** Tests are currently compiled only by
+  esbuild (vitest) and excluded from every `tsconfig`, so test-only type
+  errors do not surface in CI. Several existing test files deliberately use
+  invalid shapes (`version: 99`, wrong-shape `addNode` casts, version-pinned
+  `@ts-expect-error`) to exercise negative paths, so enabling strict
+  type-checking on `tests/` is a larger, invasive change left for a dedicated
+  PR. The two test files added here are strict-clean in isolation.
+
 ## [0.5.1] — 2026-06-21
 
 Documentation honesty patch — **no code changes** (`src/` is byte-for-byte

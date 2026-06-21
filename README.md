@@ -112,9 +112,15 @@ function:
 | `taskKey` | `string` | `"task"` | State property to read the task from. |
 | `outputKey` | `string` | `"output"` | State property the output is written to. |
 | `trajectoryKey` | `string` | `"darwinTrajectory"` | State property the trace is written to. |
-| `runOptions` | object | `{}` | Passthrough for `model`, `maxTurns`, `timeout`, `cwd`, `autonomous`, `config`. |
+| `runOptions` | object | `{}` | Passthrough for `model`, `maxTurns`, `timeout`, `cwd`, `autonomous`, `config`, `provider`. |
 | `captureTrace` | `boolean` | `true` | Set `false` to skip trajectory propagation. |
 | `onResult` | function | — | Fire-and-forget side-effect after each run. Errors are swallowed. |
+
+> **`runOptions.provider`** (since V0.5.2) forwards a pre-constructed
+> `LLMProvider` straight to `runAgent`, overriding `config.provider`. Use
+> it to inject a provider with a custom base URL / shared HTTP agent, or a
+> test double. `LLMProvider` is re-exported from `darwin-langgraph` so you
+> can build one without a second import.
 
 ### 2. `darwinAnnotation(extra?)`
 
@@ -224,7 +230,8 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.5.0` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | stable / `latest` (this release) |
+| `0.5.2` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | stable / `latest` (this release) |
+| `0.5.0` – `0.5.1` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | superseded |
 | `0.4.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
@@ -412,7 +419,7 @@ delete process.env.ANTHROPIC_API_KEY; // enforce Max-Plan subscription
 
 ## Versioning
 
-`darwin-langgraph@0.5.0` is the current **stable** release on the
+`darwin-langgraph@0.5.2` is the current **stable** release on the
 `latest` dist-tag — `npm install darwin-langgraph` resolves to it (no
 `@alpha` needed). The adapter tracks `darwin-agents` and is verified
 against the latest `@langchain/langgraph` 1.x — see the compatibility
