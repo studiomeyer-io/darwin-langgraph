@@ -1,7 +1,7 @@
 /**
  * darwin-langgraph — LangGraph.js adapter for darwin-agents.
  *
- * Public entry. Three surfaces + types + errors.
+ * Public entry. 11 surfaces + re-exported types + error classes.
  *
  * @example
  * ```ts
@@ -119,6 +119,7 @@ export type {
   AgentDefinition,
   DarwinExperiment,
   ExecutionTrace,
+  LLMProvider,
   MemoryProvider,
   RunResult,
   TraceToolCall,
@@ -127,4 +128,4 @@ export type {
 } from "./types.js";
 
 /** Adapter version — sync with `package.json` on every release. */
-export const VERSION = "0.5.1";
+export const VERSION = "0.5.2";
