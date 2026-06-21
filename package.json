@@ -1,7 +1,7 @@
 {
   "name": "darwin-langgraph",
-  "version": "0.5.1",
-  "description": "LangGraph.js adapter for darwin-agents — wrap self-evolving Darwin agents as StateGraph nodes with zero hard deps. V0.5 verifies LangGraph 1.4.x compatibility (concurrent-invoke isolation) and tracks darwin-agents 0.7. V0.4 added tool-event capture, OpenTelemetry GenAI LangGraph attributes, W3C trace context, token-budget enforcement, and an accumulating trajectory annotation.",
+  "version": "0.5.2",
+  "description": "LangGraph.js adapter for darwin-agents — wrap self-evolving Darwin agents as StateGraph nodes with zero hard deps. V0.5.2 wires the runAgent `provider` passthrough and the v8 coverage tooling; V0.5 verifies LangGraph 1.4.x compatibility (concurrent-invoke isolation) and tracks darwin-agents 0.7. V0.4 added tool-event capture, OpenTelemetry GenAI LangGraph attributes, W3C trace context, token-budget enforcement, and an accumulating trajectory annotation.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -21,6 +21,7 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
     "examples:check": "tsc --noEmit --project tsconfig.examples.json",
     "verify:version-sync": "node -e \"const p=JSON.parse(require('fs').readFileSync('./package.json','utf8'));const s=require('fs').readFileSync('./src/index.ts','utf8');const m=s.match(/VERSION = \\\"([^\\\"]+)\\\"/);if(!m){console.error('VERSION not found in src/index.ts');process.exit(1)}if(m[1]!==p.version){console.error('VERSION mismatch: package.json='+p.version+', src/index.ts='+m[1]);process.exit(1)}console.log('VERSION sync OK: '+m[1])\"",
@@ -64,6 +65,7 @@
   "devDependencies": {
     "@langchain/langgraph": "^1.4.4",
     "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "darwin-agents": "^0.5.0-alpha.1",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",

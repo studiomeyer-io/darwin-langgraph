@@ -50,9 +50,9 @@ jobs:
 
       # vitest run executes all *.test.ts files. Real @langchain/langgraph
       # internals are exercised; only the `runAgent` boundary from
-      # darwin-agents is mocked. 132/132 expected green as of v0.3.0-alpha.1.
-      - name: Run tests
-        run: npm test
+      # darwin-agents is mocked. 270/270 expected green as of v0.5.2.
+      - name: Run tests (with v8 coverage)
+        run: npm run test:coverage
 
       # Build dist/ — final gate so a release PR is publish-ready when
       # the tag goes out.

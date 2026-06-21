@@ -21,6 +21,7 @@ export type {
   AgentDefinition,
   DarwinExperiment,
   ExecutionTrace,
+  LLMProvider,
   MemoryProvider,
   RunResult,
   TraceToolCall,

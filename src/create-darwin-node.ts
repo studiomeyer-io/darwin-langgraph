@@ -34,6 +34,7 @@ import { runAgent } from "darwin-agents";
 import type {
   AgentDefinition,
   DarwinConfig,
+  LLMProvider,
   RunResult,
 } from "darwin-agents";
 
@@ -70,8 +71,8 @@ import { DarwinNodeError } from "./errors.js";
  * Mirror of `darwin-agents` `RunOptions` — narrower because the adapter
  * sets `taskType` and `promptVersion` implicitly. Exposed as `runOptions`
  * on {@link CreateDarwinNodeOptions} so consumers can forward
- * `model` / `maxTurns` / `timeout` / `autonomous` flags to `runAgent`
- * without re-importing `darwin-agents`.
+ * `model` / `maxTurns` / `timeout` / `autonomous` / `provider` flags to
+ * `runAgent` without re-importing `darwin-agents`.
  *
  * If the upstream `RunOptions` shape changes in a future `darwin-agents`
  * release, the build will break here on purpose — peer-dep semver
@@ -87,6 +88,16 @@ export interface DarwinRunOptionsPassthrough {
   cwd?: string;
   timeout?: number;
   autonomous?: boolean;
+  /**
+   * Explicit `LLMProvider` instance, forwarded verbatim to
+   * `runAgent(agent, task, { provider })`. Overrides `config.provider`
+   * upstream. Use it to inject a pre-constructed provider (custom base
+   * URL, shared HTTP agent, a test double) instead of letting
+   * `darwin-agents` build one from `DarwinConfig`. Present in the upstream
+   * `RunOptions` since `darwin-agents@0.5.0-alpha.1`; the passthrough
+   * simply forgot to mirror it until V0.5.2.
+   */
+  provider?: LLMProvider;
 }
 
 /**
