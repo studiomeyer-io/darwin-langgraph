@@ -3,6 +3,29 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] — 2026-07-03
+
+Install-fix release. **Zero runtime changes** — `src/` is byte-identical to
+0.5.2 apart from the `VERSION` constant; what changes is the manifest
+(`package.json` peer range + contributors) and the docs.
+
+### Fixed
+
+- **`darwin-agents` peer range widened to `>=0.5.0-alpha.1 <0.11.0`** (was
+  `<0.8.0`). The old cap predates `darwin-agents@0.8`; once `0.9.0` became the
+  `latest` dist-tag, a fresh `npm install darwin-langgraph darwin-agents`
+  failed with an `ERESOLVE` peer conflict — the README's own install command
+  was broken. Verified against `darwin-agents` 0.9.0 (npm) and 0.10.0 (source):
+  the re-exported trajectory types (`ExecutionTrace`, `TraceToolCall`,
+  `TraceTokenUsage`, `TraceTurnError`) are unchanged across 0.5 → 0.10, so no
+  adapter code had to move. Full test suite green against both.
+
+### Added
+
+- **Credits.** `package.json` now lists Claude (Anthropic) as a contributor and
+  the README says plainly how this adapter is built — directed and reviewed by
+  a human, largely written by Claude (currently Claude Fable 5).
+
 ## [0.5.2] — 2026-06-21
 
 Correctness + tooling patch. **Zero breaking changes** — purely additive on
