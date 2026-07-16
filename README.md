@@ -230,20 +230,25 @@ The [`examples/`](./examples/) directory ships three runnable scripts:
 
 | `darwin-langgraph` | `darwin-agents` | `@langchain/langgraph` | Status |
 |---|---|---|---|
-| `0.5.3` | `>=0.5.0-alpha.1 <0.11.0` | `^1.3.0 \|\| ^1.4.0` | stable / `latest` (this release) |
+| `0.5.4` | `>=0.5.0-alpha.1 <1.0.0` | `^1.3.0 \|\| ^1.4.0` | stable / `latest` (this release) |
+| `0.5.3` | `>=0.5.0-alpha.1 <0.11.0` | `^1.3.0 \|\| ^1.4.0` | superseded — peer cap breaks/downgrades `darwin-agents ≥ 0.11` installs |
 | `0.5.0` – `0.5.2` | `>=0.5.0-alpha.1 <0.8.0` | `^1.3.0 \|\| ^1.4.0` | superseded — peer range blocks `darwin-agents ≥ 0.8` installs |
 | `0.4.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.3.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.2.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 | `0.1.0-alpha.x` | `^0.5.0-alpha.1` | `^1.3.0` | superseded |
 
-`0.5.3` widens the `darwin-agents` peer to `>=0.5.0-alpha.1 <0.11.0` — the old
-`<0.8.0` cap made a fresh `npm install darwin-langgraph darwin-agents` fail
-with an `ERESOLVE` conflict once `darwin-agents@0.9` became `latest`. The
-adapter is verified against `@langchain/langgraph@1.4.4` and against
-`darwin-agents` 0.9 and 0.10 (the re-exported trajectory types —
-`ExecutionTrace` et al. — are unchanged across darwin-agents 0.5 → 0.10, so
-the adapter contract is stable).
+`0.5.4` opens the `darwin-agents` peer to any 0.x (`>=0.5.0-alpha.1 <1.0.0`).
+The previous per-minor caps (`<0.8.0`, then `<0.11.0`) broke fresh installs
+twice in six weeks — each new `darwin-agents` minor either hard-failed the
+paired install with `ERESOLVE` or, worse, made npm *silently downgrade*
+darwin-agents to the last in-range version. Compatibility is enforced where
+it can be observed instead: CI runs the full suite against the current
+darwin-agents (Dependabot keeps the devDependency fresh), the re-exported
+trajectory types (`ExecutionTrace` et al.) and the single runtime import
+(`runAgent`) have been stable across darwin-agents 0.5 → 0.11, and the matrix
+above records what each release was actually verified against. A darwin-agents
+1.0 gets a deliberate compatibility pass and a new adapter release.
 
 ## V0.3 — observability + safety (LIVE this release)
 
@@ -421,7 +426,7 @@ delete process.env.ANTHROPIC_API_KEY; // enforce Max-Plan subscription
 
 ## Versioning
 
-`darwin-langgraph@0.5.3` is the current **stable** release on the
+`darwin-langgraph@0.5.4` is the current **stable** release on the
 `latest` dist-tag — `npm install darwin-langgraph` resolves to it (no
 `@alpha` needed). The adapter tracks `darwin-agents` and is verified
 against the latest `@langchain/langgraph` 1.x — see the compatibility

@@ -3,6 +3,31 @@
 All notable changes to `darwin-langgraph` are documented here.
 The project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] — 2026-07-16
+
+Install-fix release, second of its kind — and the last: the peer-range policy
+changes so this class of breakage cannot recur. **Zero runtime changes** —
+`src/` is byte-identical to 0.5.3 apart from the `VERSION` constant.
+
+### Fixed
+
+- **`darwin-agents` peer range opened to `>=0.5.0-alpha.1 <1.0.0`** (was
+  `<0.11.0`). The 0.5.3 cap broke again six days after it shipped, the moment
+  `darwin-agents@0.11.0` became `latest`: an explicit
+  `npm install darwin-langgraph darwin-agents@0.11.0` failed with `ERESOLVE`,
+  and the unpinned `npm install darwin-langgraph darwin-agents` **silently
+  downgraded** darwin-agents to 0.10.0 — users lost the 0.11 features without
+  any error. A per-minor upper cap is the wrong mechanism for a 0.x companion
+  package that ships minors monthly; each release re-breaks every fresh
+  install until the adapter catches up. New policy: the peer accepts any
+  darwin-agents 0.x. Actual compatibility is enforced where it can be
+  *observed* — the CI test suite runs against the current darwin-agents
+  (devDependency, Dependabot-bumped), and the re-exported trajectory types
+  (`ExecutionTrace` et al.) plus the single runtime import (`runAgent`) have
+  been stable across darwin-agents 0.5 → 0.11. Verified: full suite green
+  against `darwin-agents@0.11.0`, fresh paired install resolves 0.11.0 with
+  no conflict and no downgrade.
+
 ## [0.5.3] — 2026-07-03
 
 Install-fix release. **Zero runtime changes** — `src/` is byte-identical to
